@@ -2,12 +2,36 @@ from __future__ import annotations
 
 import streamlit as st
 
+from src.appearance import get_appearance_settings
 from src.auth import render_login
 from src.config import APP_NAME, get_settings
 from src.db import bootstrap_database
-from src.security import can, initialize_session, logout, session_expired, touch_session
-from src.ui import inject_css, sidebar_identity
-from src.pages import account, audit, customers, dashboard, import_page, loyalty, revisions, settings, users, vehicles
+from src.security import (
+    can,
+    initialize_session,
+    logout,
+    session_expired,
+    touch_session,
+)
+from src.ui import (
+    inject_css,
+    sidebar_footer,
+    sidebar_identity,
+    sidebar_navigation,
+)
+from src.pages import (
+    account,
+    appearance,
+    audit,
+    customers,
+    dashboard,
+    import_page,
+    loyalty,
+    revisions,
+    settings,
+    users,
+    vehicles,
+)
 
 
 st.set_page_config(
@@ -16,7 +40,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="expanded",
 )
-inject_css()
+
 initialize_session()
 
 try:
@@ -24,54 +48,126 @@ try:
 except Exception as exc:
     st.error("Não foi possível inicializar o Dealer Hub.")
     st.code(str(exc))
-    st.info("Revise os Secrets do Streamlit Cloud e a liberação de rede do MongoDB Atlas.")
+    st.info(
+        "Revise os Secrets do Streamlit Cloud e a liberação de rede "
+        "do MongoDB Atlas."
+    )
     st.stop()
 
+appearance_obj = get_appearance_settings(db)
+inject_css(appearance_obj)
+
 settings_obj = get_settings()
-if st.session_state.get("authenticated") and session_expired(settings_obj.session_timeout_hours):
+if (
+    st.session_state.get("authenticated")
+    and session_expired(settings_obj.session_timeout_hours)
+):
     logout()
     st.warning("Sua sessão expirou. Faça login novamente.")
 
 if not st.session_state.get("authenticated"):
-    render_login(db)
+    render_login(db, appearance_obj)
     st.stop()
 
 user = st.session_state.auth_user
 touch_session()
-sidebar_identity(user)
+sidebar_identity(user, appearance_obj)
 
-nav = []
+nav: list[dict[str, str]] = []
+
 if can(user, "dashboard.view"):
-    nav.append(("Visão Geral", "dashboard"))
-if can(user, "customers.view"):
-    nav.append(("Clientes", "customers"))
-if can(user, "vehicles.view"):
-    nav.append(("Veículos", "vehicles"))
-if can(user, "journey.view"):
-    nav.append(("Jornada de Revisões", "revisions"))
-if can(user, "loyalty.view"):
-    nav.append(("Fidelidade / Recompra", "loyalty"))
-if can(user, "import.execute"):
-    nav.append(("Importar REL_VEICULOS", "import"))
-if can(user, "users.manage"):
-    nav.append(("Usuários e Acessos", "users"))
-if can(user, "audit.view"):
-    nav.append(("Auditoria", "audit"))
-if can(user, "settings.manage"):
-    nav.append(("Configurações", "settings"))
-nav.append(("Minha Conta", "account"))
+    nav.append(
+        {"label": "Visão Geral", "key": "dashboard", "group": "Principal"}
+    )
 
-labels = [item[0] for item in nav]
-selected_label = st.sidebar.radio("Navegação", labels, label_visibility="collapsed")
-selected = dict(nav)[selected_label]
+if can(user, "customers.view"):
+    nav.append({"label": "Clientes", "key": "customers", "group": "Base"})
+if can(user, "vehicles.view"):
+    nav.append({"label": "Veículos", "key": "vehicles", "group": "Base"})
+
+if can(user, "journey.view"):
+    nav.append(
+        {
+            "label": "Jornada de Revisões",
+            "key": "revisions",
+            "group": "Operação",
+        }
+    )
+if can(user, "loyalty.view"):
+    nav.append(
+        {
+            "label": "Fidelidade / Recompra",
+            "key": "loyalty",
+            "group": "Operação",
+        }
+    )
+
+if can(user, "import.execute"):
+    nav.append(
+        {
+            "label": "Importar REL_VEICULOS",
+            "key": "import",
+            "group": "Administração",
+        }
+    )
+if can(user, "users.manage"):
+    nav.append(
+        {
+            "label": "Usuários e Acessos",
+            "key": "users",
+            "group": "Administração",
+        }
+    )
+if can(user, "audit.view"):
+    nav.append(
+        {
+            "label": "Auditoria",
+            "key": "audit",
+            "group": "Administração",
+        }
+    )
+if can(user, "settings.manage"):
+    nav.append(
+        {
+            "label": "Configurações",
+            "key": "settings",
+            "group": "Administração",
+        }
+    )
+    nav.append(
+        {
+            "label": "Aparência",
+            "key": "appearance",
+            "group": "Administração",
+        }
+    )
+
+nav.append(
+    {
+        "label": "Minha Conta",
+        "key": "account",
+        "group": "Conta",
+    }
+)
+
+selected = sidebar_navigation(nav)
 
 st.sidebar.divider()
-if st.sidebar.button("Sair", use_container_width=True):
+if st.sidebar.button(
+    "Sair do sistema",
+    use_container_width=True,
+    key="dh_logout",
+):
     logout()
     st.rerun()
 
+sidebar_footer()
+
 if user.get("must_change_password") and selected != "account":
-    st.warning("Você está usando a senha inicial. Altere-a em **Minha Conta**.")
+    st.warning(
+        "Você está usando a senha inicial. "
+        "Altere-a em **Minha Conta**."
+    )
 
 PAGES = {
     "dashboard": dashboard.render,
@@ -83,6 +179,7 @@ PAGES = {
     "users": users.render,
     "audit": audit.render,
     "settings": settings.render,
+    "appearance": appearance.render,
     "account": account.render,
 }
 
