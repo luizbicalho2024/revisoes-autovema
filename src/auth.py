@@ -90,8 +90,3 @@ def render_login(
 
             st.session_state.login_failures = failures + 1
             st.error(message)
-
-        st.caption(
-            "As credenciais são validadas no MongoDB e as senhas "
-            "são armazenadas apenas como hash bcrypt."
-        )
