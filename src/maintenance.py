@@ -25,6 +25,15 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _as_utc(value: datetime | None) -> datetime | None:
+    # Normaliza datetime naive/aware para UTC-aware.
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def get_service_reconciliation_settings(db: Database) -> dict[str, Any]:
     doc = db.settings.find_one({"_id": "service_reconciliation"}) or {}
     raw = doc.get("rules") or {}
@@ -64,9 +73,9 @@ def evaluate_match(
     settings: dict[str, Any],
 ) -> dict[str, Any] | None:
     due_km = revision.get("due_km")
-    due_date = revision.get("due_date")
+    due_date = _as_utc(revision.get("due_date"))
     service_km = order.get("os_km")
-    service_date = order.get("service_date")
+    service_date = _as_utc(order.get("service_date"))
 
     checks = 0
     passed = 0
@@ -221,12 +230,16 @@ def reconcile_vehicle_service_history(
 
     latest_order = max(
         eligible,
-        key=lambda order: order.get("service_date")
+        key=lambda order: _as_utc(order.get("service_date"))
         or datetime.min.replace(tzinfo=timezone.utc),
         default=None,
     )
     latest_km = latest_order.get("os_km") if latest_order else None
-    latest_date = latest_order.get("service_date") if latest_order else None
+    latest_date = (
+        _as_utc(latest_order.get("service_date"))
+        if latest_order
+        else None
+    )
 
     refreshed = list(
         db.revisions.find({"vehicle_id": vehicle_id}).sort("revision_number", 1)
@@ -264,8 +277,9 @@ def reconcile_vehicle_service_history(
             next_due_date = revision.get("due_date")
             next_due_km = revision.get("due_km")
 
+            revision_due_date = _as_utc(revision.get("due_date"))
             due_by_date = bool(
-                revision.get("due_date") and revision["due_date"] <= now
+                revision_due_date and revision_due_date <= now
             )
             due_by_km = bool(
                 revision.get("due_km") not in (None, "")

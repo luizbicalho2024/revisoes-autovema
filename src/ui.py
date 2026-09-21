@@ -506,6 +506,30 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
                 max-width: min({sidebar_width}px, 86vw);
             }}
         }}
+
+        /* HOTFIX_HEADER_V62 */
+        .block-container {{
+            padding-top: 3.75rem !important;
+        }}
+
+        header[data-testid="stHeader"] {{
+            background: transparent !important;
+            backdrop-filter: none !important;
+            box-shadow: none !important;
+        }}
+
+        [data-testid="stToolbar"],
+        [data-testid="stStatusWidget"],
+        [data-testid="stDecoration"] {{
+            display: none !important;
+        }}
+
+        @media (max-width: 900px) {{
+            .block-container {{
+                padding-top: 4rem !important;
+            }}
+        }}
+
         </style>
         """,
         unsafe_allow_html=True,
