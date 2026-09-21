@@ -28,6 +28,7 @@ from src.pages import (
     import_page,
     loyalty,
     revisions,
+    services,
     settings,
     users,
     vehicles,
@@ -107,6 +108,14 @@ if can(user, "loyalty.view"):
             "group": "Operação",
         }
     )
+if can(user, "journey.view"):
+    nav.append(
+        {
+            "label": "Serviços / Manutenções",
+            "key": "services",
+            "group": "Operação",
+        }
+    )
 
 if can(user, "import.execute"):
     nav.append(
@@ -181,6 +190,7 @@ PAGES = {
     "vehicles": vehicles.render,
     "revisions": revisions.render,
     "loyalty": loyalty.render,
+    "services": services.render,
     "import": import_page.render,
     "users": users.render,
     "audit": audit.render,

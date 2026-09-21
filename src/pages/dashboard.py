@@ -55,6 +55,27 @@ def render(db: Database, user: dict) -> None:
     c3.metric("Vendas válidas", f"{sales:,}".replace(",", "."))
     c4.metric("Jornadas ativas", f"{active_journeys:,}".replace(",", "."))
 
+    maintenance_query = dict(journey_filter)
+    maintenance_pipeline = [
+        {"$match": maintenance_query},
+        {
+            "$group": {
+                "_id": {"$ifNull": ["$maintenance_status", "sem_parametros"]},
+                "total": {"$sum": 1},
+            }
+        },
+    ]
+    maintenance_rows = list(db.journeys.aggregate(maintenance_pipeline))
+    maintenance_counts = {
+        str(row.get("_id")): int(row.get("total", 0))
+        for row in maintenance_rows
+    }
+
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Manutenção em dia", maintenance_counts.get("em_dia", 0))
+    m2.metric("OS a confirmar", maintenance_counts.get("conciliar", 0))
+    m3.metric("Manutenção atrasada", maintenance_counts.get("atrasada", 0))
+
     st.markdown("### Retenção por revisão")
     rows = []
     total_base = max(active_journeys, 1)
