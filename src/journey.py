@@ -62,7 +62,7 @@ def recalculate_revision_plan(db: Database, user_email: str) -> dict[str, int]:
         for rule in rules:
             n = int(rule["revision_number"])
             due_date = calculate_due_date(sale_date, rule.get("months_after_sale"))
-            default_status = "pendente" if due_date else "nao_parametrizada"
+            default_status = "pendente" if (due_date or rule.get("km") not in (None, "")) else "nao_parametrizada"
             ops.append(
                 UpdateOne(
                     {"vehicle_id": journey["vehicle_id"], "revision_number": n},
