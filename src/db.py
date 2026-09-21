@@ -29,6 +29,7 @@ def get_client() -> MongoClient:
         connectTimeoutMS=8000,
         socketTimeoutMS=20000,
         retryWrites=True,
+        tz_aware=True,
         appname="dealer-hub-revisoes-autovema",
     )
     client.admin.command("ping")

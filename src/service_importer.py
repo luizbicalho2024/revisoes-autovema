@@ -81,6 +81,15 @@ def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _as_utc(value: datetime | None) -> datetime | None:
+    # Normaliza datetime naive/aware para UTC-aware.
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
 def read_service_orders(file_bytes: bytes) -> pd.DataFrame:
     workbook = pd.ExcelFile(io.BytesIO(file_bytes), engine="openpyxl")
     sheet_name = "Dados" if "Dados" in workbook.sheet_names else workbook.sheet_names[0]
@@ -418,8 +427,12 @@ def import_service_orders(
             else:
                 owner_match = None
 
-            sale_date = journey.get("sale_date") if journey else None
-            service_date = order.get("service_date")
+            sale_date = (
+                _as_utc(journey.get("sale_date"))
+                if journey
+                else None
+            )
+            service_date = _as_utc(order.get("service_date"))
 
             post_sale = (
                 bool(service_date and sale_date and service_date >= sale_date)
