@@ -5,7 +5,11 @@ import streamlit as st
 from src.appearance import get_appearance_settings, page_icon_value
 from src.auth import render_login
 from src.config import APP_NAME, get_settings
-from src.db import bootstrap_database
+from src.db import (
+    bootstrap_database,
+    clear_database_caches,
+    is_transient_mongo_error,
+)
 from src.security import (
     can,
     initialize_session,
@@ -48,11 +52,27 @@ try:
     db, _bootstrap_message = bootstrap_database()
 except Exception as exc:
     st.error("Não foi possível inicializar o Dealer Hub.")
-    st.code(str(exc))
-    st.info(
-        "Revise os Secrets do Streamlit Cloud e a liberação de rede "
-        "do MongoDB Atlas."
-    )
+
+    if is_transient_mongo_error(exc):
+        st.warning(
+            "O MongoDB Atlas está temporariamente sem um primário gravável "
+            "ou acabou de concluir uma eleição de nó. O sistema já tentou "
+            "reconectar automaticamente."
+        )
+        st.caption(
+            "Esse tipo de falha é transitório e não indica problema nos "
+            "Secrets nem perda dos dados."
+        )
+        st.code(f"{type(exc).__name__}: {exc}")
+        if st.button("Tentar reconectar agora", type="primary", use_container_width=True):
+            clear_database_caches()
+            st.rerun()
+    else:
+        st.code(f"{type(exc).__name__}: {exc}")
+        st.info(
+            "Para erros persistentes, revise os Secrets do Streamlit Cloud, "
+            "a URI do MongoDB Atlas e as regras de Network Access."
+        )
     st.stop()
 
 appearance_obj = get_appearance_settings(db)

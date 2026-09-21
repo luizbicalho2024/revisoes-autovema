@@ -1,11 +1,18 @@
 from __future__ import annotations
 
+import time
 from datetime import datetime, timezone
 from typing import Any
 
 import streamlit as st
 from pymongo import ASCENDING, DESCENDING, MongoClient
 from pymongo.database import Database
+from pymongo.errors import (
+    AutoReconnect,
+    NotPrimaryError,
+    OperationFailure,
+    ServerSelectionTimeoutError,
+)
 
 from .config import DEFAULT_LOYALTY_BONUSES, get_settings
 from .security import hash_password, normalize_email
@@ -29,6 +36,7 @@ def get_client() -> MongoClient:
         connectTimeoutMS=8000,
         socketTimeoutMS=20000,
         retryWrites=True,
+        retryReads=True,
         tz_aware=True,
         appname="dealer-hub-revisoes-autovema",
     )
@@ -278,14 +286,69 @@ def ensure_bootstrap_admin(db: Database) -> tuple[bool, str]:
     )
     return True, "Superadministrador inicial criado."
 
+TRANSIENT_MONGO_CODES = {
+    6, 7, 89, 91, 189, 9001, 10107, 11600, 11602, 13435, 13436,
+}
 
-def bootstrap_database() -> tuple[Database, str]:
+
+def is_transient_mongo_error(exc: BaseException) -> bool:
+    if isinstance(exc, (NotPrimaryError, AutoReconnect, ServerSelectionTimeoutError)):
+        return True
+
+    if isinstance(exc, OperationFailure):
+        if exc.code in TRANSIENT_MONGO_CODES:
+            return True
+        for label in ("RetryableWriteError", "RetryableReadError", "NoWritesPerformed"):
+            try:
+                if exc.has_error_label(label):
+                    return True
+            except Exception:
+                pass
+    return False
+
+
+def _bootstrap_database_once() -> tuple[Database, str]:
     db = get_db()
     ensure_indexes(db)
     ensure_default_settings(db)
-
     ok, message = ensure_bootstrap_admin(db)
     if not ok:
         raise RuntimeError(message)
-
     return db, message
+
+
+@st.cache_resource(show_spinner=False)
+def bootstrap_database() -> tuple[Database, str]:
+    delays = (0.0, 0.75, 1.5, 3.0, 5.0)
+    last_error: BaseException | None = None
+
+    for attempt, delay in enumerate(delays, start=1):
+        if delay:
+            time.sleep(delay)
+        try:
+            return _bootstrap_database_once()
+        except Exception as exc:
+            last_error = exc
+            if not is_transient_mongo_error(exc):
+                raise
+            if attempt >= len(delays):
+                raise
+            try:
+                get_client().admin.command("ping")
+            except Exception:
+                pass
+
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("Falha inesperada ao inicializar o MongoDB.")
+
+
+def clear_database_caches() -> None:
+    try:
+        bootstrap_database.clear()
+    except Exception:
+        pass
+    try:
+        get_client.clear()
+    except Exception:
+        pass
