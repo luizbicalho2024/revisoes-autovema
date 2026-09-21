@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from src.appearance import get_appearance_settings
+from src.appearance import get_appearance_settings, page_icon_value
 from src.auth import render_login
 from src.config import APP_NAME, get_settings
 from src.db import bootstrap_database
@@ -36,7 +36,7 @@ from src.pages import (
 
 st.set_page_config(
     page_title=APP_NAME,
-    page_icon="🚗",
+    page_icon=":material/directions_car:",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -55,6 +55,12 @@ except Exception as exc:
     st.stop()
 
 appearance_obj = get_appearance_settings(db)
+
+st.set_page_config(
+    page_title=appearance_obj["system_name"],
+    page_icon=page_icon_value(appearance_obj),
+)
+
 inject_css(appearance_obj)
 
 settings_obj = get_settings()
@@ -154,7 +160,7 @@ selected = sidebar_navigation(nav)
 
 st.sidebar.divider()
 if st.sidebar.button(
-    "Sair do sistema",
+    "Sair",
     use_container_width=True,
     key="dh_logout",
 ):

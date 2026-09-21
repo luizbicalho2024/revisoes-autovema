@@ -23,13 +23,32 @@ def _logo_preview(current: dict) -> None:
         return
 
     try:
-        st.image(base64.b64decode(current["logo_b64"]), width=180)
+        uri = f'data:{current.get("logo_mime")};base64,{current["logo_b64"]}'
+        st.markdown(
+            f"""
+            <div style="
+                min-height:72px;
+                display:flex;
+                align-items:center;
+                justify-content:flex-start;
+                background:transparent;
+                padding:8px 0;
+            ">
+                <img src="{uri}" alt="Logo" style="
+                    width:min(245px,100%);
+                    height:auto;
+                    max-height:50px;
+                    object-fit:contain;
+                    object-position:left center;
+                    background:transparent;
+                ">
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
         st.caption(current.get("logo_name") or "Logo atual")
     except Exception:
-        st.warning(
-            "O logotipo salvo não pôde ser exibido. "
-            "Você pode substituí-lo por um novo arquivo."
-        )
+        st.warning("O logotipo salvo não pôde ser exibido.")
 
 
 def render(db: Database, user: dict) -> None:
@@ -38,12 +57,7 @@ def render(db: Database, user: dict) -> None:
 
     page_header(
         "Aparência do Sistema",
-        "Personalize a identidade visual do Dealer Hub sem alterar o código.",
-    )
-
-    st.info(
-        "As preferências e o logotipo são armazenados no MongoDB Atlas "
-        "e aplicados a todos os usuários, inclusive na tela de login."
+        "Personalize logo, cores e layout. As mudanças são aplicadas globalmente.",
     )
 
     preview_col, logo_col = st.columns([1.35, 1])
@@ -71,8 +85,11 @@ def render(db: Database, user: dict) -> None:
         )
 
     with logo_col:
-        st.markdown("### Logotipo atual")
+        st.markdown("### Logotipo")
         _logo_preview(current)
+        st.caption(
+            "O mesmo arquivo é utilizado na sidebar, no login e como favicon do navegador."
+        )
 
     with st.form("appearance_form", clear_on_submit=False):
         st.markdown("### Identidade")
@@ -92,8 +109,8 @@ def render(db: Database, user: dict) -> None:
             "Enviar novo logotipo",
             type=["png", "jpg", "jpeg", "webp"],
             help=(
-                "PNG, JPG/JPEG ou WEBP. Máximo de 1,5 MB. "
-                "Para melhor resultado, use uma imagem com fundo transparente."
+                "Recomendado: PNG ou WEBP transparente, horizontal, aproximadamente "
+                "245 x 50 px. Máximo de 1,5 MB."
             ),
         )
         remove_logo = st.checkbox(
@@ -157,21 +174,21 @@ def render(db: Database, user: dict) -> None:
         c1, c2 = st.columns(2)
         border_radius = c1.slider(
             "Arredondamento dos componentes",
-            min_value=6,
-            max_value=28,
+            min_value=4,
+            max_value=24,
             value=int(current["border_radius"]),
             step=1,
         )
         sidebar_width = c2.slider(
             "Largura da sidebar",
             min_value=260,
-            max_value=380,
+            max_value=360,
             value=int(current["sidebar_width"]),
-            step=4,
+            step=2,
         )
 
         show_scope = st.toggle(
-            "Mostrar o escopo de empresas no cartão do usuário",
+            "Mostrar o escopo de empresas no perfil lateral",
             value=bool(current.get("show_scope", True)),
         )
 
@@ -205,7 +222,7 @@ def render(db: Database, user: dict) -> None:
                 db,
                 values,
                 user.get("email", "system"),
-                logo_bytes=logo.getvalue() if logo is not None else None,
+                logo_bytes_value=logo.getvalue() if logo is not None else None,
                 logo_name=logo.name if logo is not None else None,
                 remove_logo=remove_logo,
             )
@@ -225,15 +242,14 @@ def render(db: Database, user: dict) -> None:
                     "logo_changed": bool(logo) or remove_logo,
                 },
             )
-            st.success("Personalização salva. Aplicando o novo visual...")
+            st.success("Personalização salva.")
             st.rerun()
 
     st.divider()
 
     with st.expander("Restaurar aparência padrão"):
         st.caption(
-            "Restaura nome, cores e layout originais do Dealer Hub "
-            "e remove o logotipo personalizado."
+            "Restaura nome, cores e layout originais e remove o logotipo personalizado."
         )
         confirm = st.checkbox(
             "Confirmo que desejo restaurar a aparência padrão",

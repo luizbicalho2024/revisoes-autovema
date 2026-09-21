@@ -12,7 +12,7 @@ def test_layout_limits():
     theme = normalize_appearance(
         {"border_radius": 999, "sidebar_width": 1}
     )
-    assert theme["border_radius"] == 28
+    assert theme["border_radius"] == 24
     assert theme["sidebar_width"] == 260
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import io
 import re
 from datetime import datetime, timezone
 from typing import Any
@@ -15,15 +16,15 @@ DEFAULT_APPEARANCE = {
     "primary_color": "#B5121B",
     "secondary_color": "#17202A",
     "accent_color": "#F59E0B",
-    "background_color": "#F6F8FB",
+    "background_color": "#F7F8FA",
     "surface_color": "#FFFFFF",
     "text_color": "#17202A",
     "muted_color": "#667085",
     "border_color": "#E4E7EC",
-    "sidebar_color": "#101828",
+    "sidebar_color": "#111827",
     "sidebar_text_color": "#F8FAFC",
-    "border_radius": 14,
-    "sidebar_width": 304,
+    "border_radius": 12,
+    "sidebar_width": 286,
     "show_scope": True,
 }
 
@@ -83,14 +84,22 @@ def normalize_appearance(values: dict[str, Any] | None) -> dict[str, Any]:
 
     try:
         result["border_radius"] = max(
-            6, min(int(values.get("border_radius", DEFAULT_APPEARANCE["border_radius"])), 28)
+            4,
+            min(
+                int(values.get("border_radius", DEFAULT_APPEARANCE["border_radius"])),
+                24,
+            ),
         )
     except (TypeError, ValueError):
         result["border_radius"] = DEFAULT_APPEARANCE["border_radius"]
 
     try:
         result["sidebar_width"] = max(
-            260, min(int(values.get("sidebar_width", DEFAULT_APPEARANCE["sidebar_width"])), 380)
+            260,
+            min(
+                int(values.get("sidebar_width", DEFAULT_APPEARANCE["sidebar_width"])),
+                360,
+            ),
         )
     except (TypeError, ValueError):
         result["sidebar_width"] = DEFAULT_APPEARANCE["sidebar_width"]
@@ -123,12 +132,31 @@ def logo_data_uri(appearance: dict[str, Any] | None) -> str | None:
     return f"data:{mime};base64,{payload}"
 
 
+def logo_bytes(appearance: dict[str, Any] | None) -> bytes | None:
+    appearance = appearance or {}
+    mime = appearance.get("logo_mime")
+    payload = appearance.get("logo_b64")
+    if mime not in ALLOWED_LOGO_MIMES or not payload:
+        return None
+    try:
+        return base64.b64decode(payload, validate=True)
+    except Exception:
+        return None
+
+
+def page_icon_value(appearance: dict[str, Any] | None):
+    data = logo_bytes(appearance)
+    if not data:
+        return ":material/directions_car:"
+    return io.BytesIO(data)
+
+
 def save_appearance_settings(
     db: Database,
     values: dict[str, Any],
     user_email: str,
     *,
-    logo_bytes: bytes | None = None,
+    logo_bytes_value: bytes | None = None,
     logo_name: str | None = None,
     remove_logo: bool = False,
 ) -> dict[str, Any]:
@@ -146,11 +174,11 @@ def save_appearance_settings(
             "logo_name": "",
             "logo_sha256": "",
         }
-    elif logo_bytes is not None:
-        if len(logo_bytes) > MAX_LOGO_BYTES:
+    elif logo_bytes_value is not None:
+        if len(logo_bytes_value) > MAX_LOGO_BYTES:
             raise ValueError("O logotipo deve ter no máximo 1,5 MB.")
 
-        mime = detect_image_mime(logo_bytes)
+        mime = detect_image_mime(logo_bytes_value)
         if mime not in ALLOWED_LOGO_MIMES:
             raise ValueError(
                 "Arquivo inválido. Use uma imagem PNG, JPG/JPEG ou WEBP válida."
@@ -158,10 +186,10 @@ def save_appearance_settings(
 
         update.update(
             {
-                "logo_b64": base64.b64encode(logo_bytes).decode("ascii"),
+                "logo_b64": base64.b64encode(logo_bytes_value).decode("ascii"),
                 "logo_mime": mime,
                 "logo_name": _clean_text(logo_name, "logo", 120),
-                "logo_sha256": hashlib.sha256(logo_bytes).hexdigest(),
+                "logo_sha256": hashlib.sha256(logo_bytes_value).hexdigest(),
             }
         )
 

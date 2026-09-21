@@ -33,7 +33,9 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
     st.markdown(
         f"""
         <style>
-        :root {{
+        :root,
+        .stApp,
+        [data-testid="stAppViewContainer"] {{
             --dh-primary: {theme["primary_color"]};
             --dh-secondary: {theme["secondary_color"]};
             --dh-accent: {theme["accent_color"]};
@@ -45,6 +47,11 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
             --dh-sidebar: {theme["sidebar_color"]};
             --dh-sidebar-text: {theme["sidebar_text_color"]};
             --dh-radius: {radius}px;
+
+            --primary-color: {theme["primary_color"]} !important;
+            --background-color: {theme["background_color"]} !important;
+            --secondary-background-color: {theme["surface_color"]} !important;
+            --text-color: {theme["text_color"]} !important;
         }}
 
         html, body, [class*="css"] {{
@@ -52,32 +59,34 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
         }}
 
         .stApp {{
-            background:
-                radial-gradient(circle at 94% -8%, rgba({pr},{pg},{pb},.055), transparent 29rem),
-                var(--dh-bg);
+            background: var(--dh-bg);
             color: var(--dh-text);
         }}
 
         .block-container {{
-            padding-top: 1.45rem;
+            padding-top: 1.35rem;
             padding-bottom: 3rem;
             max-width: 1540px;
         }}
 
         header[data-testid="stHeader"] {{
-            background: transparent;
+            background: color-mix(in srgb, var(--dh-bg) 92%, transparent);
+            backdrop-filter: blur(8px);
         }}
 
+        /* -------------------------------------------------
+           SIDEBAR MINIMALISTA
+        ------------------------------------------------- */
         [data-testid="stSidebar"] {{
-            background: linear-gradient(180deg, var(--dh-sidebar) 0%, var(--dh-secondary) 145%);
-            border-right: 1px solid rgba(255,255,255,.07);
+            background: var(--dh-sidebar);
+            border-right: 1px solid rgba({sr},{sg},{sb},.10);
             min-width: {sidebar_width}px;
             max-width: {sidebar_width}px;
-            box-shadow: 18px 0 44px rgba(16,24,40,.08);
+            box-shadow: none;
         }}
 
         [data-testid="stSidebar"] > div:first-child {{
-            padding-top: .7rem;
+            padding-top: .55rem;
         }}
 
         [data-testid="stSidebar"] p,
@@ -86,85 +95,90 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
         }}
 
         [data-testid="stSidebar"] hr {{
-            border-color: rgba(255,255,255,.09);
-            margin: .8rem 0;
+            border-color: rgba({sr},{sg},{sb},.10);
+            margin: .7rem 0;
         }}
 
-        .dh-brand-card {{
-            margin: .1rem 0 .72rem;
-            padding: .95rem;
-            border-radius: calc(var(--dh-radius) + 2px);
-            border: 1px solid rgba(255,255,255,.10);
-            background:
-                radial-gradient(circle at 100% 0%, rgba({pr},{pg},{pb},.44), transparent 65%),
-                rgba(255,255,255,.05);
-            box-shadow: 0 16px 34px rgba(0,0,0,.10);
+        .dh-brand {{
+            padding: .25rem .25rem .85rem;
         }}
 
-        .dh-brand-row {{
+        .dh-sidebar-logo {{
             display: flex;
             align-items: center;
-            gap: .76rem;
+            justify-content: flex-start;
+            width: 100%;
+            min-height: 50px;
+            overflow: visible;
+            background: transparent;
+            border: 0;
         }}
 
-        .dh-logo,
+        .dh-sidebar-logo img {{
+            display: block;
+            width: min(245px, 100%);
+            height: auto;
+            max-height: 50px;
+            object-fit: contain;
+            object-position: left center;
+            background: transparent !important;
+        }}
+
+        .dh-brand-fallback {{
+            display: flex;
+            align-items: center;
+            gap: .68rem;
+            min-height: 50px;
+        }}
+
         .dh-brand-mark {{
-            width: 48px;
-            height: 48px;
-            min-width: 48px;
-            border-radius: 12px;
+            width: 36px;
+            height: 36px;
+            min-width: 36px;
+            border-radius: 9px;
             display: flex;
             align-items: center;
             justify-content: center;
-            overflow: hidden;
-        }}
-
-        .dh-logo {{
-            background: #fff;
-            border: 1px solid rgba(255,255,255,.25);
-        }}
-
-        .dh-logo img {{
-            max-width: 42px;
-            max-height: 42px;
-            object-fit: contain;
-        }}
-
-        .dh-brand-mark {{
             background: var(--dh-primary);
             color: #fff;
-            font-weight: 850;
-            letter-spacing: -.02em;
-            box-shadow: 0 8px 20px rgba({pr},{pg},{pb},.25);
+            font-size: .82rem;
+            font-weight: 800;
         }}
 
         .dh-brand-name {{
             color: var(--dh-sidebar-text);
-            font-size: 1.02rem;
+            font-size: .98rem;
             line-height: 1.05;
-            font-weight: 780;
-            letter-spacing: -.015em;
+            font-weight: 720;
+            letter-spacing: -.012em;
         }}
 
         .dh-brand-subtitle {{
-            margin-top: .3rem;
-            color: rgba({sr},{sg},{sb},.65);
-            font-size: .73rem;
+            margin-top: .22rem;
+            color: rgba({sr},{sg},{sb},.52);
+            font-size: .69rem;
             line-height: 1.15;
         }}
 
+        .dh-sidebar-subtitle {{
+            margin-top: .38rem;
+            color: rgba({sr},{sg},{sb},.48);
+            font-size: .68rem;
+            line-height: 1.2;
+        }}
+
         .dh-user-card {{
-            padding: .8rem .88rem;
-            margin-bottom: .72rem;
-            border-radius: var(--dh-radius);
-            background: rgba(255,255,255,.045);
-            border: 1px solid rgba(255,255,255,.07);
+            padding: .68rem .25rem .74rem;
+            margin-bottom: .2rem;
+            border-top: 1px solid rgba({sr},{sg},{sb},.09);
+            border-bottom: 1px solid rgba({sr},{sg},{sb},.09);
+            background: transparent;
         }}
 
         .dh-user-name {{
             color: var(--dh-sidebar-text);
-            font-weight: 690;
-            font-size: .88rem;
+            font-weight: 620;
+            font-size: .82rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -172,83 +186,80 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
 
         .dh-user-meta,
         .dh-user-scope {{
-            color: rgba({sr},{sg},{sb},.58);
-            font-size: .69rem;
-            margin-top: .19rem;
-            line-height: 1.28;
+            color: rgba({sr},{sg},{sb},.48);
+            font-size: .66rem;
+            margin-top: .14rem;
+            line-height: 1.22;
             overflow-wrap: anywhere;
         }}
 
         .dh-nav-section {{
-            color: rgba({sr},{sg},{sb},.43);
-            font-size: .62rem;
-            font-weight: 820;
-            letter-spacing: .12em;
+            color: rgba({sr},{sg},{sb},.36);
+            font-size: .60rem;
+            font-weight: 720;
+            letter-spacing: .11em;
             text-transform: uppercase;
-            margin: .95rem .72rem .32rem;
+            margin: .86rem .62rem .26rem;
         }}
 
         .dh-nav-active {{
-            min-height: 2.55rem;
+            min-height: 2.35rem;
             display: flex;
             align-items: center;
-            gap: .64rem;
-            margin: .08rem 0;
-            padding: .54rem .78rem;
-            border-radius: max(9px, calc(var(--dh-radius) - 3px));
+            gap: .58rem;
+            margin: .03rem 0;
+            padding: .48rem .66rem;
+            border-radius: max(7px, calc(var(--dh-radius) - 4px));
             color: var(--dh-sidebar-text);
-            font-size: .875rem;
-            font-weight: 700;
-            background: linear-gradient(
-                90deg,
-                rgba({pr},{pg},{pb},.31),
-                rgba(255,255,255,.06)
-            );
-            border: 1px solid rgba({pr},{pg},{pb},.34);
-            box-shadow: inset 3px 0 0 var(--dh-primary);
+            font-size: .82rem;
+            font-weight: 650;
+            background: rgba({pr},{pg},{pb},.11);
+            border-left: 2px solid var(--dh-primary);
         }}
 
         .dh-nav-dot {{
-            width: 6px;
-            height: 6px;
+            width: 4px;
+            height: 4px;
             border-radius: 50%;
-            background: var(--dh-accent);
-            box-shadow: 0 0 0 4px rgba({pr},{pg},{pb},.11);
+            background: var(--dh-primary);
         }}
 
         [data-testid="stSidebar"] div.stButton > button {{
             width: 100%;
-            min-height: 2.55rem;
+            min-height: 2.35rem;
             justify-content: flex-start;
-            border-radius: max(9px, calc(var(--dh-radius) - 3px));
-            border: 1px solid transparent !important;
+            border-radius: max(7px, calc(var(--dh-radius) - 4px));
+            border: 0 !important;
             background: transparent !important;
             color: var(--dh-sidebar-text) !important;
-            font-weight: 570;
-            padding-left: .78rem;
+            font-size: .82rem;
+            font-weight: 520;
+            padding-left: .66rem;
             box-shadow: none !important;
-            transition: background .16s ease, border-color .16s ease, transform .16s ease;
+            transition: background .14s ease;
         }}
 
         [data-testid="stSidebar"] div.stButton > button:hover {{
-            background: rgba(255,255,255,.065) !important;
-            border-color: rgba(255,255,255,.075) !important;
-            transform: translateX(2px);
+            background: rgba({sr},{sg},{sb},.055) !important;
+            transform: none;
         }}
 
         .dh-sidebar-footer {{
-            color: rgba({sr},{sg},{sb},.38);
-            text-align: center;
-            font-size: .64rem;
-            padding: .3rem .4rem .5rem;
+            color: rgba({sr},{sg},{sb},.30);
+            text-align: left;
+            font-size: .60rem;
+            padding: .2rem .25rem .45rem;
         }}
 
+        /* -------------------------------------------------
+           COMPONENTES GLOBAIS
+        ------------------------------------------------- */
         [data-testid="stMetric"] {{
             background: var(--dh-surface);
             border: 1px solid var(--dh-border);
-            padding: 1rem 1.05rem;
+            padding: .95rem 1rem;
             border-radius: var(--dh-radius);
-            box-shadow: 0 5px 18px rgba(16,24,40,.035);
+            box-shadow: 0 2px 8px rgba(16,24,40,.025);
         }}
 
         [data-testid="stMetric"] label {{
@@ -257,7 +268,7 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
 
         [data-testid="stMetricValue"] {{
             color: var(--dh-text);
-            font-weight: 760;
+            font-weight: 740;
         }}
 
         div[data-testid="stForm"],
@@ -271,85 +282,117 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
             padding: 1rem;
         }}
 
+        /* Botões */
+        button,
         div.stButton > button,
         div.stDownloadButton > button,
         div.stFormSubmitButton > button {{
-            border-radius: max(9px, calc(var(--dh-radius) - 3px));
+            border-radius: max(7px, calc(var(--dh-radius) - 3px)) !important;
         }}
 
+        [data-testid="stBaseButton-primary"],
         div.stButton > button[kind="primary"],
         div.stFormSubmitButton > button[kind="primary"] {{
-            background: var(--dh-primary);
-            border-color: var(--dh-primary);
-            color: #fff;
+            background: var(--dh-primary) !important;
+            border-color: var(--dh-primary) !important;
+            color: #fff !important;
+            box-shadow: none !important;
         }}
 
+        [data-testid="stBaseButton-primary"]:hover,
+        div.stButton > button[kind="primary"]:hover,
+        div.stFormSubmitButton > button[kind="primary"]:hover {{
+            filter: brightness(.93);
+        }}
+
+        [data-testid="stBaseButton-secondary"],
+        div.stButton > button[kind="secondary"],
+        div.stDownloadButton > button {{
+            background: var(--dh-surface) !important;
+            color: var(--dh-text) !important;
+            border-color: var(--dh-border) !important;
+            box-shadow: none !important;
+        }}
+
+        [data-testid="stBaseButton-secondary"]:hover,
+        div.stButton > button[kind="secondary"]:hover,
+        div.stDownloadButton > button:hover {{
+            border-color: var(--dh-primary) !important;
+            color: var(--dh-primary) !important;
+        }}
+
+        /* Inputs / selects */
+        input,
+        textarea {{
+            color: var(--dh-text) !important;
+            caret-color: var(--dh-primary) !important;
+        }}
+
+        [data-baseweb="input"] > div,
+        [data-baseweb="textarea"] > div,
+        [data-baseweb="select"] > div {{
+            background: var(--dh-surface) !important;
+            border-color: var(--dh-border) !important;
+        }}
+
+        [data-baseweb="input"] > div:focus-within,
+        [data-baseweb="textarea"] > div:focus-within,
+        [data-baseweb="select"] > div:focus-within {{
+            border-color: var(--dh-primary) !important;
+            box-shadow: 0 0 0 1px var(--dh-primary) !important;
+        }}
+
+        /* Checkboxes / radios / toggles / sliders */
+        input[type="checkbox"],
+        input[type="radio"],
+        input[type="range"] {{
+            accent-color: var(--dh-primary) !important;
+        }}
+
+        [data-testid="stCheckbox"] svg,
+        [data-testid="stRadio"] svg {{
+            color: var(--dh-primary);
+        }}
+
+        [data-testid="stSlider"] [role="slider"] {{
+            background: var(--dh-primary) !important;
+            border-color: var(--dh-primary) !important;
+        }}
+
+        [data-testid="stToggle"] [role="switch"][aria-checked="true"] {{
+            background: var(--dh-primary) !important;
+        }}
+
+        /* Tabs */
+        [data-baseweb="tab-list"] [aria-selected="true"] {{
+            color: var(--dh-primary) !important;
+        }}
+
+        [data-baseweb="tab-highlight"] {{
+            background-color: var(--dh-primary) !important;
+        }}
+
+        /* Links e progresso */
         a {{
             color: var(--dh-primary);
         }}
 
-        .dh-login-wrap {{
-            text-align: center;
-            margin-top: 6vh;
-            margin-bottom: 1.2rem;
-        }}
-
-        .dh-login-logo,
-        .dh-login-mark {{
-            width: 76px;
-            height: 76px;
-            margin: 0 auto .88rem;
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            overflow: hidden;
-            box-shadow: 0 14px 34px rgba(16,24,40,.10);
-        }}
-
-        .dh-login-logo {{
-            background: #fff;
-            border: 1px solid var(--dh-border);
-        }}
-
-        .dh-login-logo img {{
-            max-width: 66px;
-            max-height: 66px;
-            object-fit: contain;
-        }}
-
-        .dh-login-mark {{
-            color: #fff;
-            background: linear-gradient(135deg, var(--dh-primary), var(--dh-secondary));
-            font-size: 1.35rem;
-            font-weight: 850;
-        }}
-
-        .dh-login-brand {{
-            font-size: 2rem;
-            font-weight: 820;
-            letter-spacing: -.035em;
-            color: var(--dh-text);
-        }}
-
-        .dh-login-subtitle {{
-            font-size: .96rem;
-            color: var(--dh-muted);
-            margin-top: .25rem;
+        [data-testid="stProgressBar"] > div > div > div {{
+            background-color: var(--dh-primary) !important;
         }}
 
         .dh-title {{
-            font-size: 1.85rem;
-            font-weight: 790;
-            letter-spacing: -.035em;
+            font-size: 1.78rem;
+            font-weight: 760;
+            letter-spacing: -.032em;
             line-height: 1.16;
             color: var(--dh-text);
         }}
 
         .dh-subtitle {{
             color: var(--dh-muted);
-            margin-top: .32rem;
-            margin-bottom: 1.3rem;
+            margin-top: .28rem;
+            margin-bottom: 1.2rem;
         }}
 
         .dh-card {{
@@ -357,16 +400,15 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
             border: 1px solid var(--dh-border);
             border-radius: var(--dh-radius);
             padding: 1rem;
-            box-shadow: 0 5px 18px rgba(16,24,40,.035);
         }}
 
         .dh-chip {{
             display: inline-block;
             padding: 3px 9px;
             border-radius: 999px;
-            background: rgba({pr},{pg},{pb},.10);
+            background: rgba({pr},{pg},{pb},.09);
             color: var(--dh-primary);
-            font-size: .78rem;
+            font-size: .76rem;
             margin-right: 4px;
         }}
 
@@ -374,9 +416,64 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
         .dh-status-warn {{ color: #B45309; font-weight: 650; }}
         .dh-status-bad {{ color: #B42318; font-weight: 650; }}
 
+        /* -------------------------------------------------
+           LOGIN - LOGO HORIZONTAL, SEM FUNDO
+        ------------------------------------------------- */
+        .dh-login-wrap {{
+            text-align: center;
+            margin-top: 6vh;
+            margin-bottom: 1.1rem;
+        }}
+
+        .dh-login-logo {{
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            margin: 0 auto .85rem;
+            background: transparent;
+        }}
+
+        .dh-login-logo img {{
+            display: block;
+            width: min(245px, 100%);
+            max-width: 245px;
+            height: auto;
+            max-height: 50px;
+            object-fit: contain;
+            background: transparent !important;
+        }}
+
+        .dh-login-mark {{
+            width: 54px;
+            height: 54px;
+            margin: 0 auto .8rem;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            background: var(--dh-primary);
+            font-size: 1rem;
+            font-weight: 800;
+        }}
+
+        .dh-login-brand {{
+            font-size: 1.85rem;
+            font-weight: 780;
+            letter-spacing: -.032em;
+            color: var(--dh-text);
+        }}
+
+        .dh-login-subtitle {{
+            font-size: .92rem;
+            color: var(--dh-muted);
+            margin-top: .22rem;
+        }}
+
         .dh-preview {{
             padding: 1rem;
-            min-height: 160px;
+            min-height: 155px;
             border-radius: var(--dh-radius);
             border: 1px solid var(--dh-border);
             background: var(--dh-bg);
@@ -388,20 +485,19 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
             border: 1px solid var(--dh-border);
             border-radius: var(--dh-radius);
             padding: 1rem;
-            box-shadow: 0 8px 24px rgba(16,24,40,.055);
         }}
 
         .dh-preview-bar {{
-            width: 46px;
-            height: 5px;
+            width: 44px;
+            height: 4px;
             border-radius: 99px;
             background: var(--dh-primary);
-            margin-bottom: .75rem;
+            margin-bottom: .72rem;
         }}
 
         .dh-preview-muted {{
             color: var(--dh-muted);
-            font-size: .82rem;
+            font-size: .8rem;
         }}
 
         @media (max-width: 900px) {{
@@ -422,18 +518,20 @@ def login_identity(appearance: dict[str, Any] | None = None) -> None:
 
     if logo_uri:
         mark = f'<div class="dh-login-logo"><img src="{logo_uri}" alt="Logo"></div>'
+        title = ""
     else:
         mark = (
             f'<div class="dh-login-mark">'
             f'{html.escape(_initials(theme["system_name"]))}'
             f"</div>"
         )
+        title = f'<div class="dh-login-brand">{html.escape(theme["system_name"])}</div>'
 
     st.markdown(
         f"""
         <div class="dh-login-wrap">
           {mark}
-          <div class="dh-login-brand">{html.escape(theme["system_name"])}</div>
+          {title}
           <div class="dh-login-subtitle">{html.escape(theme["system_subtitle"])}</div>
         </div>
         """,
@@ -461,26 +559,25 @@ def sidebar_identity(
     logo_uri = logo_data_uri(appearance)
 
     if logo_uri:
-        mark = f'<div class="dh-logo"><img src="{logo_uri}" alt="Logo"></div>'
-    else:
-        mark = (
-            f'<div class="dh-brand-mark">'
-            f'{html.escape(_initials(theme["system_name"]))}'
+        brand = (
+            f'<div class="dh-sidebar-logo">'
+            f'<img src="{logo_uri}" alt="{html.escape(theme["system_name"])}">'
             f"</div>"
+            f'<div class="dh-sidebar-subtitle">{html.escape(theme["system_subtitle"])}</div>'
         )
-
-    st.sidebar.markdown(
-        f"""
-        <div class="dh-brand-card">
-          <div class="dh-brand-row">
-            {mark}
-            <div>
-              <div class="dh-brand-name">{html.escape(theme["system_name"])}</div>
-              <div class="dh-brand-subtitle">{html.escape(theme["system_subtitle"])}</div>
-            </div>
+    else:
+        brand = f"""
+        <div class="dh-brand-fallback">
+          <div class="dh-brand-mark">{html.escape(_initials(theme["system_name"]))}</div>
+          <div>
+            <div class="dh-brand-name">{html.escape(theme["system_name"])}</div>
+            <div class="dh-brand-subtitle">{html.escape(theme["system_subtitle"])}</div>
           </div>
         </div>
-        """,
+        """
+
+    st.sidebar.markdown(
+        f'<div class="dh-brand">{brand}</div>',
         unsafe_allow_html=True,
     )
 
