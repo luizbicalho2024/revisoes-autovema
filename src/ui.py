@@ -874,6 +874,50 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
             margin-bottom: .25rem;
         }}
 
+        /* Painel da jornada: leitura em cinco etapas, alinhada à referência. */
+        .dh-revision-focus-note {{
+            padding: .82rem 1rem;
+            margin: .1rem 0 .9rem;
+            background: color-mix(in srgb, var(--dh-primary) 5%, var(--dh-surface));
+            border: 1px solid var(--dh-border);
+            border-left: 4px solid var(--dh-primary);
+            border-radius: 12px;
+            color: var(--dh-text);
+            font-size: .84rem;
+            line-height: 1.48;
+        }}
+        .dh-five-stage {{
+            min-height: 122px;
+            margin-top: .25rem;
+            padding: .95rem 1rem;
+            border: 1px solid var(--dh-border);
+            border-radius: 16px;
+            background: var(--dh-surface);
+            box-shadow: 0 8px 23px rgba({tr},{tg},{tb}, .035);
+        }}
+        .dh-five-step {{
+            color: var(--dh-primary);
+            font-size: .72rem;
+            font-weight: 780;
+            letter-spacing: .06em;
+        }}
+        .dh-five-number {{
+            margin-top: .3rem;
+            color: var(--dh-text);
+            font-size: 2.1rem;
+            font-weight: 800;
+            letter-spacing: -.035em;
+            line-height: 1.05;
+        }}
+        .dh-five-sub {{
+            color: var(--dh-muted);
+            margin-top: .32rem;
+            font-size: .72rem;
+        }}
+        @media (max-width: 900px) {{
+            .dh-five-stage {{ min-height: 112px; }}
+        }}
+
         @media (max-width: 900px) {{
             .dh-top-band {{
                 flex-direction: column;

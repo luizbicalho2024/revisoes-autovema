@@ -1,557 +1,354 @@
+"""Visão Geral centrada exclusivamente nas cinco revisões da jornada.
+
+Leitura somente; usa os status já registrados em revisions, sem inferir que
+uma OS ou menção textual representa revisão concluída.
+"""
 from __future__ import annotations
 
-from datetime import datetime
+import html
+from collections import Counter
+from datetime import datetime, timezone
 from typing import Any
 
 import pandas as pd
 import streamlit as st
 from pymongo.database import Database
 
-from ..appearance import get_appearance_settings
-from ..charts import column_chart, donut_chart, line_chart, horizontal_bar_chart
-from ..repositories import array_scoped_filter, scoped_filter
+from ..repositories import scoped_filter
+from ..revision_audit import (
+    STAGES,
+    STAGE_LABELS,
+    STATUS_LABELS,
+    csv_bytes,
+    evidence_quality,
+    summarize_journeys,
+    table_rows,
+)
+from ..security import can
 from ..ui import page_header
-from ..revision_metrics import get_revision_metrics
 
 
-MONTHS_PT = {
-    1: "Jan",
-    2: "Fev",
-    3: "Mar",
-    4: "Abr",
-    5: "Mai",
-    6: "Jun",
-    7: "Jul",
-    8: "Ago",
-    9: "Set",
-    10: "Out",
-    11: "Nov",
-    12: "Dez",
-}
+def _chunks(seq: list[Any], size: int = 500):
+    for i in range(0, len(seq), size):
+        yield seq[i:i + size]
 
 
-def _fmt_int(value: Any) -> str:
-    try:
-        return f"{int(value):,}".replace(",", ".")
-    except Exception:
-        return "0"
+def _format_date(value: Any) -> str:
+    return value.strftime("%d/%m/%Y") if hasattr(value, "strftime") else "—"
 
 
-
-def _fmt_pct(value: float) -> str:
-    return f"{value:.1f}%"
-
+def _number(value: int) -> str:
+    return f"{int(value):,}".replace(",", ".")
 
 
-def _safe_div(num: float, den: float) -> float:
-    return (num / den * 100) if den else 0.0
+def _rate(value: int, total: int) -> str:
+    return f"{(100.0 * value / total) if total else 0:.1f}%".replace(".", ",")
 
 
-
-def _metric_tile(label: str, value: Any, note: str = "", accent: str = "") -> str:
-    accent_html = f'<div class="dh-metric-accent">{accent}</div>' if accent else ""
-    note_html = f'<div class="dh-metric-note">{note}</div>' if note else ""
-    return (
-        '<div class="dh-metric-tile">'
-        f'<div class="dh-metric-label">{label}</div>'
-        f'<div class="dh-metric-value">{value}</div>'
-        f'{note_html}'
-        f'{accent_html}'
-        '</div>'
+def _load_audit(db: Database, user: dict[str, Any], active_only: bool) -> tuple[dict[str, Any], dict[str, Any]]:
+    query = dict(scoped_filter(user))
+    if active_only:
+        query["status"] = "ativa"
+    journeys = list(db.journeys.find(query, {
+        "vehicle_id": 1, "customer_id": 1, "company_name": 1,
+        "sale_date": 1, "status": 1, "company_code": 1,
+    }))
+    vehicle_ids = list({j["vehicle_id"] for j in journeys if j.get("vehicle_id") is not None})
+    customer_ids = list({j["customer_id"] for j in journeys if j.get("customer_id") is not None})
+    vehicle_map: dict[str, dict[str, Any]] = {}
+    customer_map: dict[str, dict[str, Any]] = {}
+    revisions: list[dict[str, Any]] = []
+    selected_events: list[dict[str, Any]] = []
+    for batch in _chunks(vehicle_ids):
+        lookup = {"$in": batch}
+        for v in db.vehicles.find({"_id": lookup}, {"plate": 1, "chassis": 1, "model": 1}):
+            vehicle_map[str(v["_id"])] = v
+        revisions.extend(db.revisions.find({"vehicle_id": lookup, "revision_number": {"$in": list(STAGES)}}, {
+            "vehicle_id": 1, "revision_number": 1, "status": 1, "due_date": 1,
+            "performed_at": 1, "performed_km": 1, "source": 1,
+            "service_order_id": 1, "candidate_service_order_id": 1,
+        }))
+        selected_events.extend(db.revision_events.find({"vehicle_id": lookup}, {
+            "vehicle_id": 1, "review_override": 1, "classification": 1,
+            "revision_number": 1, "manual_revision_number": 1,
+            "os_number": 1, "service_date": 1, "confidence": 1,
+            "evidence_text": 1, "link_status": 1, "closed_at": 1,
+            "owner_match": 1, "post_sale": 1,
+        }))
+    for batch in _chunks(customer_ids):
+        for c in db.customers.find({"_id": {"$in": batch}}, {"name": 1}):
+            customer_map[str(c["_id"])] = c
+    overview = summarize_journeys(
+        journeys, vehicle_map, customer_map, revisions, selected_events,
+        now=datetime.now(timezone.utc),
     )
+    return overview, {"vehicle_ids": vehicle_ids, "selected_events": selected_events}
 
 
-
-def _stack_tile(label: str, value: Any, note: str = "") -> str:
-    note_html = f'<div class="dh-stack-note">{note}</div>' if note else ""
-    return (
-        '<div class="dh-stack-tile">'
-        f'<div class="dh-stack-label">{label}</div>'
-        f'<div class="dh-stack-value">{value}</div>'
-        f'{note_html}'
-        '</div>'
-    )
+def _read_quality(db: Database, user: dict[str, Any], valid_ids: set[str]) -> dict[str, Any]:
+    # A contagem de eventos utiliza a mesma regra de escopo dos demais módulos.
+    events = db.revision_events.find(scoped_filter(user), {
+        "vehicle_id": 1, "revision_number": 1,
+        "manual_revision_number": 1, "classification": 1,
+        "review_override": 1, "link_status": 1, "confidence": 1,
+    })
+    return evidence_quality(events, valid_vehicle_ids=valid_ids)
 
 
-
-def _section_heading(kicker: str, title: str, subtitle: str) -> None:
-    st.markdown(
-        f'''
-        <div class="dh-section-head">
-          <div class="dh-section-kicker">{kicker}</div>
-          <div class="dh-section-title">{title}</div>
-          <div class="dh-section-subtitle">{subtitle}</div>
-        </div>
-        ''',
-        unsafe_allow_html=True,
-    )
-
-
-
-def _latest_import_badge(job: dict[str, Any] | None) -> str:
-    if not job:
-        return "Sem importações recentes"
-    filename = str(job.get("filename") or "Importação")
-    status = str(job.get("status") or "desconhecido").upper()
-    started = job.get("started_at")
-    when = ""
-    if isinstance(started, datetime):
-        when = started.strftime("%d/%m/%Y %H:%M")
-    if when:
-        return f"Última carga: {filename} · {status} · {when}"
-    return f"Última carga: {filename} · {status}"
-
-
-
-def _insight_message(metrics: dict[str, Any], customers: int, vehicles: int) -> tuple[str, str]:
-    confirmed = int(metrics.get("confirmed", 0))
-    pending = int(metrics.get("pending", 0))
-    total = int(metrics.get("total", 0))
-    linked = int(metrics.get("linked", 0))
-
-    if total == 0:
-        return (
-            "Sem leitura histórica consolidada",
-            "Importe o catálogo de anomalias e o ROF080 para começar a medir as revisões automaticamente.",
-        )
-    if pending > confirmed * 5:
-        return (
-            "Alta fila de conferência manual",
-            "A maior parte dos sinais de revisão ainda depende de validação. Priorize conferência das OS ambíguas e por observação.",
-        )
-    if confirmed > 0 and linked < total:
-        return (
-            "Base já começou a comprovar revisões",
-            "Há revisões confirmadas, mas ainda existem eventos sem vínculo completo com veículo ou jornada. Vale revisar cadastros e chassis.",
-        )
-    if vehicles and customers:
-        return (
-            "Painel operacional atualizado",
-            "Clientes, veículos e jornada estão coerentes com a base importada. O próximo passo é elevar a taxa de revisões comprovadas.",
-        )
-    return (
-        "Painel carregado",
-        "Revise as importações mais recentes e valide a classificação para melhorar a leitura executiva.",
-    )
-
-
-
-def render(db: Database, user: dict) -> None:
-    appearance = get_appearance_settings(db)
-
-    customer_filter = array_scoped_filter(user)
-    vehicle_filter = array_scoped_filter(user)
-    sale_filter = scoped_filter(user)
-    journey_filter = scoped_filter(user)
-
-    customers = db.customers.count_documents(customer_filter)
-    vehicles = db.vehicles.count_documents(vehicle_filter)
-    sales_filter = {**sale_filter, "is_cancelled": False}
-    journey_active_filter = {**journey_filter, "status": "ativa"}
-
-    sales = db.sales.count_documents(sales_filter)
-    active_journeys = db.journeys.count_documents(journey_active_filter)
-
-    maintenance_query = dict(journey_filter)
-    maintenance_pipeline = [
-        {"$match": maintenance_query},
-        {
-            "$group": {
-                "_id": {"$ifNull": ["$maintenance_status", "sem_parametros"]},
-                "total": {"$sum": 1},
-            }
-        },
-    ]
-    maintenance_rows = list(db.journeys.aggregate(maintenance_pipeline))
-    maintenance_counts = {
-        str(row.get("_id")): int(row.get("total", 0))
-        for row in maintenance_rows
-    }
-
-    metrics = get_revision_metrics(db, user)
-    latest_job = db.import_jobs.find_one({}, sort=[("started_at", -1)])
-    headline, support = _insight_message(metrics, customers, vehicles)
-
-    page_header(
-        "Visão Geral",
-        "Painel executivo das importações, retenção por revisão e qualidade do histórico ROF080.",
-    )
-
-    st.markdown(
-        f'''
-        <div class="dh-top-band">
-          <div>
-            <div class="dh-top-band-label">Resumo executivo</div>
-            <div class="dh-top-band-title">{headline}</div>
-            <div class="dh-top-band-subtitle">{support}</div>
-          </div>
-          <div class="dh-top-band-badge">{_latest_import_badge(latest_job)}</div>
-        </div>
-        ''',
-        unsafe_allow_html=True,
-    )
-
-    shell_left, shell_right = st.columns([0.9, 2.8], gap="large")
-
-    with shell_left:
-        st.markdown('<div class="dh-panel-shell">', unsafe_allow_html=True)
-        st.markdown('<div class="dh-stack-title">Base atual</div>', unsafe_allow_html=True)
-        st.markdown(
-            _stack_tile("Clientes", _fmt_int(customers), "Base ativa importada"),
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            _stack_tile("Veículos", _fmt_int(vehicles), "Com chassi vinculado"),
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            _stack_tile("Vendas válidas", _fmt_int(sales), "Exclui canceladas"),
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            _stack_tile("Jornadas ativas", _fmt_int(active_journeys), "Elegíveis para revisão"),
-            unsafe_allow_html=True,
-        )
-        st.markdown("</div>", unsafe_allow_html=True)
-
-    with shell_right:
-        top_a, top_b, top_c, top_d = st.columns(4)
-        top_a.markdown(
-            _metric_tile(
-                "Manutenção em dia",
-                _fmt_int(maintenance_counts.get("em_dia", 0)),
-                note="Jornadas sem atraso",
-                accent=_fmt_pct(_safe_div(maintenance_counts.get("em_dia", 0), active_journeys)),
-            ),
-            unsafe_allow_html=True,
-        )
-        top_b.markdown(
-            _metric_tile(
-                "OS para conferência",
-                _fmt_int(maintenance_counts.get("conciliar", 0)),
-                note="Aguardando conciliação",
-                accent=_fmt_pct(_safe_div(maintenance_counts.get("conciliar", 0), active_journeys)),
-            ),
-            unsafe_allow_html=True,
-        )
-        top_c.markdown(
-            _metric_tile(
-                "Manutenção atrasada",
-                _fmt_int(maintenance_counts.get("atrasada", 0)),
-                note="Jornadas fora da meta",
-                accent=_fmt_pct(_safe_div(maintenance_counts.get("atrasada", 0), active_journeys)),
-            ),
-            unsafe_allow_html=True,
-        )
-        top_d.markdown(
-            _metric_tile(
-                "Cobertura da jornada",
-                _fmt_pct(_safe_div(active_journeys, vehicles)),
-                note="Jornadas ativas / veículos",
-                accent=f"{_fmt_int(active_journeys)}/{_fmt_int(vehicles)}",
-            ),
-            unsafe_allow_html=True,
-        )
-
-        _section_heading(
-            "retenção",
-            "Retenção por revisão",
-            "Leitura das revisões já marcadas como realizadas e reflexo sobre a frota ativa.",
-        )
-
-        retention_rows = []
-        total_base = max(active_journeys, 1)
-        for number in range(1, 6):
-            query = {"revision_number": number, "status": "realizada"}
-            if journey_filter.get("company_code"):
-                query["company_code"] = journey_filter["company_code"]
-            completed = len(db.revisions.distinct("vehicle_id", query))
-            retention_rows.append(
-                {
-                    "Revisão": f"{number}ª",
-                    "Veículos retidos": completed,
-                    "Taxa": completed / total_base * 100,
-                }
-            )
-        retention_df = pd.DataFrame(retention_rows)
-
-        ret_left, ret_right = st.columns([1.25, 1], gap="large")
-        with ret_left:
-            if retention_df["Veículos retidos"].sum() > 0:
-                column_chart(
-                    [
-                        {
-                            "categoria": row["Revisão"],
-                            "valor": int(row["Veículos retidos"]),
-                        }
-                        for _, row in retention_df.iterrows()
-                    ],
-                    category_field="categoria",
-                    value_field="valor",
-                    appearance=appearance,
-                    height=300,
-                )
-            else:
-                st.info(
-                    "Ainda não há revisões registradas como realizadas. Parametrize as regras e atualize a jornada para iniciar a medição."
-                )
-        with ret_right:
+def _stage_cards(data: dict[str, Any]) -> None:
+    columns = st.columns(5, gap="small")
+    for n, col in zip(STAGES, columns):
+        count = data["by_stage"][n]
+        confirmed = count.get("realizada", 0)
+        eligible = int(data.get("stage_due_cohort", {}).get(n, 0))
+        pct = f"{_rate(confirmed, eligible)} dos elegíveis" if eligible else "Sem coorte vencida"
+        with col:
             st.markdown(
-                _metric_tile(
-                    "Veículos retidos",
-                    _fmt_int(retention_df["Veículos retidos"].sum()),
-                    note="Soma das 5 primeiras etapas",
-                    accent=_fmt_pct(retention_df["Taxa"].sum()),
-                ),
+                '<div class="dh-five-stage">'
+                f'<div class="dh-five-step">{n}ª REVISÃO</div>'
+                f'<div class="dh-five-number">{_number(confirmed)}</div>'
+                f'<div class="dh-five-sub">{pct} · {eligible} elegíveis</div>'
+                '</div>',
                 unsafe_allow_html=True,
             )
+            st.caption(
+                f"{_number(count.get('indicio', 0))} indício(s) · "
+                f"{_number(count.get('vencida', 0))} vencida(s) · "
+                f"{_number(count.get('lacuna', 0))} lacuna(s)"
+            )
+
+
+def _detail(db: Database, item: dict[str, Any]) -> None:
+    st.markdown("#### Histórico da jornada selecionada")
+    st.caption(
+        "Os dados abaixo são do veículo selecionado. A fonte é o plano de revisões e "
+        "as OS vinculadas ao seu chassi; a simples menção em uma observação não confirma execução."
+    )
+    st.write(
+        f"**Cliente:** {item['customer_name']}  |  **Veículo:** {item['model'] or '—'}  "
+        f"|  **Placa:** {item['plate']}  |  **Chassi:** {item['chassis'] or '—'}"
+    )
+    st.caption(
+        f"Venda: {_format_date(item['sale_date'])} · "
+        f"Concessionária: {item['company'] or '—'} · "
+        f"Situação: {item['situation']}"
+    )
+    order_ids = list({
+        item["stages"][n][field]
+        for n in STAGES
+        for field in ("service_order_id", "candidate_service_order_id")
+        if item["stages"][n].get(field)
+    })
+    order_map = {}
+    if order_ids:
+        order_map = {str(o["_id"]): o for o in db.service_orders.find(
+            {"_id": {"$in": order_ids}},
+            {"os_number": 1, "service_date": 1, "os_km": 1},
+        )}
+    detail_rows = []
+    for n in STAGES:
+        stage = item["stages"][n]
+        oid = stage.get("service_order_id") or stage.get("candidate_service_order_id")
+        order = order_map.get(str(oid), {}) if oid else {}
+        detail_rows.append({
+            "Etapa": f"{n}ª revisão",
+            "Situação": stage["status"],
+            "Previsão": _format_date(stage["due_date"]),
+            "Realizada em": _format_date(stage["performed_at"]),
+            "KM": stage["performed_km"] if stage["performed_km"] is not None else "—",
+            "OS": order.get("os_number") or ("Vinculada" if oid else "—"),
+            "Origem": stage.get("source") or ("Sugestão de OS" if stage.get("candidate_service_order_id") else "—"),
+            "Indícios vinculados": len(stage.get("events") or []),
+        })
+    st.dataframe(pd.DataFrame(detail_rows), hide_index=True, use_container_width=True)
+    if item["has_gap"]:
+        gaps = ", ".join(f"{n}ª" for n in item["gap_stages"])
+        st.warning(
+            f"Lacuna de sequência nas etapas {gaps}: existe revisão posterior registrada, "
+            "mas essas etapas não constam como realizadas. Isso NÃO prova que o cliente "
+            "pulou a revisão; verifique as OS antes de registrar evasão."
+        )
+    if item["has_external"]:
+        st.error("Há revisão marcada como realizada fora da concessionária. Esse é um registro explícito da jornada.")
+    event_rows = []
+    for event in sorted(item["events"], key=lambda e: e.get("service_date") or datetime.min.replace(tzinfo=timezone.utc), reverse=True):
+        stage = event.get("manual_revision_number") if event.get("review_override") == "confirmada" else event.get("revision_number")
+        event_rows.append({
+            "OS": event.get("os_number"),
+            "Data": _format_date(event.get("service_date")),
+            "Etapa indicada": f"{stage}ª" if stage else "Indefinida",
+            "Classificação": event.get("review_override") or event.get("classification") or "—",
+            "Tipo de evidência": event.get("confidence") or "—",
+            "Descrição": event.get("evidence_text") or "—",
+        })
+    with st.expander(f"Evidências de OS associadas ao veículo ({len(event_rows)})"):
+        if event_rows:
+            st.dataframe(pd.DataFrame(event_rows), use_container_width=True, hide_index=True)
+        else:
+            st.info("Nenhum sinal ROF080 associado a este veículo na base atual.")
+    if st.button("Abrir jornada para conferência/correção", type="primary", key="dh_open_revision_journey"):
+        st.session_state["dh_target_vehicle_id"] = item["vehicle_id"]
+        st.session_state["dh_active_page"] = "revisions"
+        st.rerun()
+
+
+def render(db: Database, user: dict[str, Any]) -> None:
+    page_header(
+        "Painel das 5 revisões",
+        "Quem realizou cada revisão, quem completou o ciclo e onde existem lacunas a investigar.",
+    )
+    st.markdown(
+        '<div class="dh-revision-focus-note">'
+        '<strong>Critério de comprovação:</strong> somente revisão registrada como realizada na jornada. '
+        'Manutenções genéricas e menções em observações ficam separadas para conferência. '
+        'Uma lacuna não significa necessariamente que o cliente deixou de fazer a revisão.'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    active_only = st.toggle("Apenas jornadas ativas", value=True, key="dh_five_active")
+    try:
+        data, scope = _load_audit(db, user, active_only)
+    except Exception as exc:
+        st.error("Não foi possível consultar o histórico das cinco revisões.")
+        st.caption(f"Erro técnico: {type(exc).__name__}. Consulte os logs do servidor.")
+        return
+    rows = data["rows"]
+    situations = data["by_situation"]
+    total = int(data["total"])
+    complete = situations.get("completo", 0)
+    completed_customers = len({r["customer_id"] for r in rows
+                               if r["situation_key"] == "completo" and r["customer_id"]})
+    gaps = sum(bool(r["has_gap"]) for r in rows)
+    outside = sum(bool(r["has_external"]) for r in rows)
+    with_evidence = sum(bool(r["has_pending_evidence"]) for r in rows)
+    overdue = sum(bool(r["has_overdue"]) for r in rows)
+
+    kpis = st.columns(5, gap="small")
+    kpis[0].metric("Veículos acompanhados", _number(total))
+    kpis[1].metric("Cinco revisões realizadas", _number(complete), help="Todos os cinco status estão como realizados")
+    kpis[2].metric("Com lacunas na sequência", _number(gaps), help="Etapa posterior realizada e anterior sem comprovação")
+    kpis[3].metric("Revisão fora da rede", _number(outside), help="Status de evasão explicitamente registrado")
+    kpis[4].metric("Indícios a conferir", _number(with_evidence), help="Veículos com evidência de revisão ainda não confirmada")
+    st.caption(
+        f"{_number(completed_customers)} cliente(s) distinto(s) já têm veículo com as cinco revisões concluídas · "
+        f"{_number(overdue)} veículo(s) com etapa vencida sem comprovação. "
+        "São indicadores de veículos/jornadas, não de linhas de OS."
+    )
+
+    st.markdown("### Acompanhamento da 1ª à 5ª revisão")
+    _stage_cards(data)
+    st.caption(
+        "Taxa por etapa: revisões realizadas divididas apenas pelas jornadas com prazo "
+        "da etapa vencido por data, etapa realizada ou lacuna em sequência. "
+        "A quilometragem atual não foi usada para antecipar prazos."
+    )
+
+    tab_fleet, tab_quality = st.tabs(["Clientes e veículos por revisão", "Diagnóstico das OS importadas"])
+    with tab_fleet:
+        if not can(user, "journey.view"):
+            st.warning("Seu perfil não tem permissão para visualizar os detalhes das jornadas.")
+        elif not rows:
+            st.info("Nenhuma jornada encontrada neste escopo. Verifique as importações e os filtros.")
+        else:
+            filter_a, filter_b, filter_c = st.columns([2.1, 1.1, 1.1])
+            with filter_a:
+                term = st.text_input("Buscar cliente ou veículo", placeholder="Nome, placa, chassi ou modelo", key="dh_five_search").strip().casefold()
+            with filter_b:
+                situation_keys = ["Todos"] + list(STATUS_LABELS.keys())
+                chosen_situation = st.selectbox(
+                    "Situação da jornada", situation_keys,
+                    format_func=lambda key: STATUS_LABELS.get(key, key), key="dh_five_situation",
+                )
+            with filter_c:
+                chosen_stage = st.selectbox("Etapa", ["Todas"] + list(STAGES),
+                                            format_func=lambda x: f"{x}ª revisão" if isinstance(x, int) else x,
+                                            key="dh_five_stage")
+            only_gaps = st.checkbox("Somente veículos com lacuna entre etapas", value=False,
+                                    key="dh_five_only_gaps")
+            chosen_stage_status = "Todas"
+            if isinstance(chosen_stage, int):
+                chosen_stage_status = st.selectbox("Situação da etapa escolhida", ["Todas"] + list(STAGE_LABELS.keys()),
+                                                 format_func=lambda key: STAGE_LABELS.get(key, key), key="dh_five_stage_status")
+            filtered = []
+            for item in rows:
+                search_blob = " ".join(str(item[k]) for k in ("customer_name", "plate", "chassis", "model")).casefold()
+                if term and term not in search_blob:
+                    continue
+                if chosen_situation != "Todos" and item["situation_key"] != chosen_situation:
+                    continue
+                if only_gaps and not item["has_gap"]:
+                    continue
+                if isinstance(chosen_stage, int) and chosen_stage_status != "Todas" and item["stages"][chosen_stage]["state"] != chosen_stage_status:
+                    continue
+                filtered.append(item)
+            st.markdown(f"**{_number(len(filtered))} veículo(s)** correspondem aos filtros.")
+            if filtered:
+                visible_rows = table_rows(filtered)
+                df = pd.DataFrame(visible_rows)
+                st.dataframe(
+                    df,
+                    hide_index=True,
+                    use_container_width=True,
+                    height=min(630, 110 + 34 * min(len(df), 15)),
+                )
+                if can(user, "reports.export"):
+                    st.download_button(
+                        "Exportar matriz das 5 revisões (CSV)",
+                        csv_bytes(visible_rows),
+                        file_name="dealer_hub_5_revisoes_veiculos.csv",
+                        mime="text/csv",
+                        key="dh_five_export",
+                    )
+                st.divider()
+                labels = [
+                    f"{r['plate']} · {r['customer_name']} · {r['model']} · {r['vehicle_id'][-6:]}"
+                    for r in filtered
+                ]
+                index = st.selectbox("Escolha um veículo para ver OS e as cinco etapas", range(len(filtered)),
+                                     format_func=lambda index: labels[index], key="dh_five_detail_select")
+                _detail(db, filtered[index])
+            else:
+                st.info("Nenhum veículo corresponde aos filtros selecionados.")
+
+    with tab_quality:
+        st.markdown("#### Por que existem tantas manutenções sem revisão vinculada?")
+        st.caption(
+            "Esta auditoria conta **sinais de revisão encontrados em OS**. "
+            "O histórico ROF080 pode incluir veículos antigos, OS anteriores à venda, "
+            "observações sem serviço executado e chassis ausentes da frota de jornadas. "
+            "Esses registros não podem ser classificados automaticamente como revisões realizadas."
+        )
+        if not st.toggle("Carregar diagnóstico completo do ROF080", value=False, key="dh_five_load_quality"):
+            st.info("O diagnóstico detalhado é carregado sob demanda para manter a matriz das cinco revisões rápida.")
+            return
+        try:
+            quality = _read_quality(db, user, {str(v) for v in scope["vehicle_ids"]})
+        except Exception as exc:
+            st.error("Falha ao consultar qualidade dos vínculos das OS.")
+            st.caption(f"Erro técnico: {type(exc).__name__}. Consulte os logs do servidor.")
+            return
+        counters = quality["totals"]
+        qa, qb, qc, qd = st.columns(4)
+        qa.metric("Sinais de OS", _number(counters.get("all_events", 0)))
+        qb.metric("Sem vínculo de veículo", _number(counters.get("unlinked_vehicle", 0)))
+        qc.metric("Ligados à frota filtrada", _number(counters.get("linked_selected", 0)))
+        qd.metric("Ligados, aguardando análise", _number(counters.get("linked_for_review", 0)))
+        st.caption(
+            f"{_number(counters.get('observation_only', 0))} sinais vêm apenas de observações de OS; "
+            f"{_number(counters.get('first_five_identified', 0))} sinais associados à frota têm ordinal da 1ª à 5ª. "
+            "São métricas de evidência, não de revisões concluídas."
+        )
+        reasons = quality.get("link_reasons") or {}
+        if reasons:
             st.dataframe(
-                retention_df.style.format({"Taxa": "{:.1f}%"}),
+                pd.DataFrame([{"Motivo do vínculo": key, "Sinais de OS": value}
+                              for key, value in sorted(reasons.items(), key=lambda x: x[1], reverse=True)]),
                 hide_index=True,
                 use_container_width=True,
             )
-
-        _section_heading(
-            "rof080",
-            "Qualidade do histórico de revisões",
-            "Métricas de leitura do histórico importado, separando sinais identificados, comprovações e pendências.",
+        st.info(
+            "**Próxima ação operacional:** confira primeiro as evidências vinculadas aos "
+            "veículos da jornada. Os demais registros dependem de conciliação segura de chassi, "
+            "proprietário, data da venda e fechamento da OS; não serão forçados para uma etapa."
         )
-
-        total_signals = int(metrics.get("total", 0))
-        confirmed = int(metrics.get("confirmed", 0))
-        pending = int(metrics.get("pending", 0))
-        linked = int(metrics.get("linked", 0))
-        confirmation_rate = _safe_div(confirmed, total_signals)
-        linking_rate = _safe_div(linked, total_signals)
-
-        q1, q2, q3, q4 = st.columns(4)
-        q1.markdown(
-            _metric_tile(
-                "Sinais de revisão",
-                _fmt_int(total_signals),
-                note="Eventos encontrados no ROF080",
-                accent="Histórico importado",
-            ),
-            unsafe_allow_html=True,
-        )
-        q2.markdown(
-            _metric_tile(
-                "Revisões comprovadas",
-                _fmt_int(confirmed),
-                note="Com serviço, OS encerrada e elegível",
-                accent=_fmt_pct(confirmation_rate),
-            ),
-            unsafe_allow_html=True,
-        )
-        q3.markdown(
-            _metric_tile(
-                "Pendências",
-                _fmt_int(pending),
-                note="Exigem validação manual",
-                accent=_fmt_pct(_safe_div(pending, total_signals)),
-            ),
-            unsafe_allow_html=True,
-        )
-        q4.markdown(
-            _metric_tile(
-                "Com vínculo de veículo",
-                _fmt_int(linked),
-                note="Eventos ligados a um veículo",
-                accent=_fmt_pct(linking_rate),
-            ),
-            unsafe_allow_html=True,
-        )
-
-        hist_left, hist_right = st.columns([1.2, 1.15], gap="large")
-        with hist_left:
-            if metrics["monthly"]:
-                st.markdown('<div class="dh-chart-title">Revisões comprovadas por mês</div>', unsafe_allow_html=True)
-                line_chart(
-                    [{"categoria": row["_id"], "valor": int(row["total"])} for row in metrics["monthly"][-24:]],
-                    category_field="categoria",
-                    value_field="valor",
-                    appearance=appearance,
-                    height=290,
-                )
-            else:
-                st.info("Ainda não há revisões comprovadas suficientes para formar a série mensal.")
-        with hist_right:
-            if metrics["by_revision"]:
-                st.markdown('<div class="dh-chart-title">Revisões comprovadas por etapa</div>', unsafe_allow_html=True)
-                horizontal_bar_chart(
-                    [
-                        {
-                            "categoria": f"{int(row['_id'])}ª revisão",
-                            "valor": int(row["orders"]),
-                        }
-                        for row in metrics["by_revision"]
-                    ],
-                    category_field="categoria",
-                    value_field="valor",
-                    appearance=appearance,
-                    height=290,
-                )
-            else:
-                st.info("Ainda não há etapas confirmadas suficientes para montar o ranking.")
-
-        with st.expander("Qualidade da classificação e pendências do ROF080"):
-            conf_cols = st.columns([1.05, 1.2])
-            with conf_cols[0]:
-                st.markdown(
-                    _metric_tile(
-                        "Taxa de confirmação",
-                        _fmt_pct(confirmation_rate),
-                        note="Revisões comprovadas / sinais identificados",
-                    ),
-                    unsafe_allow_html=True,
-                )
-                st.markdown(
-                    _metric_tile(
-                        "Taxa de vínculo",
-                        _fmt_pct(linking_rate),
-                        note="Eventos ligados a um veículo / sinais identificados",
-                    ),
-                    unsafe_allow_html=True,
-                )
-            with conf_cols[1]:
-                st.dataframe(
-                    pd.DataFrame(
-                        [
-                            {
-                                "Classificação": row.get("_id") or "não classificada",
-                                "Eventos": row["total"],
-                            }
-                            for row in metrics["by_confidence"]
-                        ]
-                    ),
-                    hide_index=True,
-                    use_container_width=True,
-                )
-
-        _section_heading(
-            "fidelidade",
-            "Programa de fidelidade",
-            "Distribuição atual das jornadas pelo percentual de bônus calculado.",
-        )
-
-        loyalty_query = {"status": "ativa"}
-        if journey_filter.get("company_code"):
-            loyalty_query["company_code"] = journey_filter["company_code"]
-
-        pipeline = [
-            {"$match": loyalty_query},
-            {"$group": {"_id": "$loyalty_bonus_pct", "total": {"$sum": 1}}},
-            {"$sort": {"_id": 1}},
-        ]
-        loyalty = list(db.journeys.aggregate(pipeline))
-
-        loyalty_left, loyalty_right = st.columns([1.15, 1], gap="large")
-        if loyalty:
-            loyalty_rows = [
-                {
-                    "categoria": f"{float(row.get('_id') or 0):.0f}% de bônus",
-                    "valor": int(row["total"]),
-                }
-                for row in loyalty
-            ]
-            with loyalty_left:
-                donut_chart(
-                    loyalty_rows,
-                    category_field="categoria",
-                    value_field="valor",
-                    appearance=appearance,
-                    height=280,
-                )
-            with loyalty_right:
-                st.dataframe(
-                    pd.DataFrame(
-                        [
-                            {
-                                "Bônus atual": row["categoria"],
-                                "Veículos": row["valor"],
-                            }
-                            for row in loyalty_rows
-                        ]
-                    ),
-                    hide_index=True,
-                    use_container_width=True,
-                )
-        else:
-            st.caption("Nenhuma jornada elegível calculada até o momento.")
-
-        _section_heading(
-            "tendência",
-            "Vendas por mês",
-            "Evolução mensal das vendas válidas importadas para acompanhamento da base comercial.",
-        )
-
-        monthly_pipeline = [
-            {
-                "$match": {
-                    **sale_filter,
-                    "is_cancelled": False,
-                    "sale_date": {"$ne": None},
-                }
-            },
-            {
-                "$group": {
-                    "_id": {
-                        "year": {"$year": "$sale_date"},
-                        "month": {"$month": "$sale_date"},
-                    },
-                    "vendas": {"$sum": 1},
-                    "valor": {"$sum": {"$ifNull": ["$sale_value", 0]}},
-                }
-            },
-            {"$sort": {"_id.year": 1, "_id.month": 1}},
-        ]
-
-        monthly = list(db.sales.aggregate(monthly_pipeline))
-        if monthly:
-            monthly_rows = []
-            for row in monthly:
-                year = int(row["_id"]["year"])
-                month = int(row["_id"]["month"])
-                monthly_rows.append(
-                    {
-                        "mes": f"{MONTHS_PT[month]}/{str(year)[-2:]}",
-                        "vendas": int(row["vendas"]),
-                    }
-                )
-
-            line_chart(
-                monthly_rows,
-                category_field="mes",
-                value_field="vendas",
-                appearance=appearance,
-                height=330,
-            )
-
-        _section_heading(
-            "cargas",
-            "Últimas importações",
-            "Conferência rápida das cargas executadas e do aproveitamento obtido em cada arquivo.",
-        )
-        jobs = list(db.import_jobs.find({}).sort("started_at", -1).limit(8))
-        if jobs:
-            data = []
-            for job in jobs:
-                summary = job.get("summary") or {}
-                data.append(
-                    {
-                        "Arquivo": job.get("filename"),
-                        "Status": job.get("status"),
-                        "Linhas": summary.get("rows_received", 0),
-                        "Válidas": summary.get("rows_valid", 0),
-                        "Clientes novos": summary.get("customers_upserted", 0),
-                        "Veículos novos": summary.get("vehicles_upserted", 0),
-                        "Início": job.get("started_at"),
-                    }
-                )
-            st.dataframe(
-                pd.DataFrame(data),
-                hide_index=True,
-                use_container_width=True,
-            )
-        else:
-            st.caption("Nenhuma importação executada.")

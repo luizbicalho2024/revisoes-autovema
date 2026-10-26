@@ -57,7 +57,12 @@ def render(db: Database, user: dict) -> None:
     with f3:
         overdue_only = st.checkbox("Somente vencidas")
 
+    # Abertura direta a partir da matriz executiva. O filtro de escopo
+    # continua sendo aplicado às jornadas logo abaixo desta consulta.
+    target_vehicle_id = st.session_state.pop("dh_target_vehicle_id", None)
     vehicle_query = {}
+    if target_vehicle_id and not search:
+        vehicle_query = {"_id": target_vehicle_id}
     if search:
         import re
 
