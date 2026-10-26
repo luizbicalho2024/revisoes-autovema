@@ -18,8 +18,10 @@ def _json(data: Any) -> str:
     )
 
 
+
 def _hex_value(value: str) -> str:
     return value.lstrip("#")
+
 
 
 def _frame(body: str, chart_id: str, height: int) -> None:
@@ -51,6 +53,7 @@ def _frame(body: str, chart_id: str, height: int) -> None:
         height=height + 8,
         scrolling=False,
     )
+
 
 
 def column_chart(
@@ -119,21 +122,6 @@ def column_chart(
         fillOpacity:.92
       }});
 
-      series.bullets.push(function() {{
-        return am5.Bullet.new(root, {{
-          locationY:1,
-          sprite:am5.Label.new(root, {{
-            text:"{{valueY}}",
-            centerX:am5.p50,
-            centerY:am5.p100,
-            dy:-8,
-            fill:am5.color(0x{_hex_value(theme["text_color"])}),
-            fontSize:11,
-            fontWeight:"600"
-          }})
-        }});
-      }});
-
       var data = {_json(data)};
       xAxis.data.setAll(data);
       series.data.setAll(data);
@@ -141,6 +129,7 @@ def column_chart(
       chart.appear(500,80);
     """
     _frame(body, chart_id, height)
+
 
 
 def line_chart(
@@ -229,6 +218,84 @@ def line_chart(
       chart.appear(500,80);
     """
     _frame(body, chart_id, height)
+
+
+
+def horizontal_bar_chart(
+    data: list[dict[str, Any]],
+    *,
+    category_field: str,
+    value_field: str,
+    appearance: dict[str, Any] | None = None,
+    height: int = 320,
+) -> None:
+    theme = normalize_appearance(appearance)
+    chart_id = f"amchart_{uuid.uuid4().hex}"
+    body = f"""
+      var root = am5.Root.new("{chart_id}");
+      root.setThemes([am5themes_Animated.new(root)]);
+
+      var chart = root.container.children.push(am5xy.XYChart.new(root, {{
+        panX:false, panY:false, wheelX:"none", wheelY:"none",
+        paddingLeft:0, paddingRight:8, paddingTop:6, paddingBottom:0,
+        layout: root.verticalLayout
+      }}));
+
+      var yRenderer = am5xy.AxisRendererY.new(root, {{ minGridDistance:16 }});
+      yRenderer.grid.template.setAll({{ strokeOpacity:0 }});
+      yRenderer.labels.template.setAll({{
+        fill:am5.color(0x{_hex_value(theme["text_color"])}),
+        fontSize:11,
+        paddingRight:8
+      }});
+
+      var yAxis = chart.yAxes.push(am5xy.CategoryAxis.new(root, {{
+        categoryField:"{category_field}",
+        renderer:yRenderer
+      }}));
+
+      var xRenderer = am5xy.AxisRendererX.new(root, {{}});
+      xRenderer.grid.template.setAll({{
+        stroke:am5.color(0x{_hex_value(theme["border_color"])}),
+        strokeOpacity:.4
+      }});
+      xRenderer.labels.template.setAll({{
+        fill:am5.color(0x{_hex_value(theme["muted_color"])}),
+        fontSize:11
+      }});
+
+      var xAxis = chart.xAxes.push(am5xy.ValueAxis.new(root, {{
+        min:0,
+        extraMax:.08,
+        renderer:xRenderer
+      }}));
+
+      var series = chart.series.push(am5xy.ColumnSeries.new(root, {{
+        xAxis:xAxis,
+        yAxis:yAxis,
+        valueXField:"{value_field}",
+        categoryYField:"{category_field}",
+        sequencedInterpolation:true,
+        tooltip:am5.Tooltip.new(root, {{ labelText:"{{categoryY}}: {{valueX}}" }})
+      }}));
+
+      series.columns.template.setAll({{
+        height: am5.percent(62),
+        cornerRadiusTR: 7,
+        cornerRadiusBR: 7,
+        strokeOpacity:0,
+        fill:am5.color(0x{_hex_value(theme["primary_color"])}),
+        fillOpacity:.92
+      }});
+
+      var data = {_json(data)};
+      yAxis.data.setAll(data);
+      series.data.setAll(data);
+      series.appear(500);
+      chart.appear(500,80);
+    """
+    _frame(body, chart_id, height)
+
 
 
 def donut_chart(

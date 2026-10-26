@@ -720,6 +720,171 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
             font-size: .8rem;
         }}
 
+        .dh-top-band {{
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 1rem;
+            margin: .25rem 0 1.1rem;
+            padding: 1rem 1.05rem;
+            border: 1px solid var(--dh-border);
+            border-radius: 18px;
+            background: linear-gradient(180deg, var(--dh-surface), color-mix(in srgb, var(--dh-surface) 88%, var(--dh-bg) 12%));
+            box-shadow: 0 14px 28px rgba({tr},{tg},{tb}, .035);
+        }}
+
+        .dh-top-band-label {{
+            color: var(--dh-primary);
+            font-size: .68rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .1em;
+            margin-bottom: .35rem;
+        }}
+
+        .dh-top-band-title {{
+            color: var(--dh-text);
+            font-size: 1.08rem;
+            font-weight: 760;
+            line-height: 1.2;
+        }}
+
+        .dh-top-band-subtitle {{
+            color: var(--dh-muted);
+            font-size: .84rem;
+            margin-top: .22rem;
+            line-height: 1.42;
+            max-width: 760px;
+        }}
+
+        .dh-top-band-badge {{
+            min-width: 235px;
+            padding: .72rem .82rem;
+            border-radius: 14px;
+            border: 1px solid var(--dh-border);
+            background: color-mix(in srgb, var(--dh-bg) 55%, white 45%);
+            color: var(--dh-text);
+            font-size: .75rem;
+            line-height: 1.35;
+        }}
+
+        .dh-panel-shell {{
+            display: flex;
+            flex-direction: column;
+            gap: .8rem;
+            margin-bottom: 1.1rem;
+        }}
+
+        .dh-stack-title {{
+            color: var(--dh-text);
+            font-size: .95rem;
+            font-weight: 750;
+            letter-spacing: -.01em;
+        }}
+
+        .dh-stack-tile {{
+            position: relative;
+            overflow: hidden;
+            padding: 1rem 1rem 1rem 1.1rem;
+            border: 1px solid var(--dh-border);
+            border-left: 6px solid var(--dh-primary);
+            border-radius: 18px;
+            background: var(--dh-surface);
+            box-shadow: 0 14px 28px rgba({tr},{tg},{tb}, .03);
+        }}
+
+        .dh-stack-label,
+        .dh-metric-label {{
+            color: var(--dh-muted);
+            font-size: .79rem;
+            margin-bottom: .42rem;
+        }}
+
+        .dh-stack-value,
+        .dh-metric-value {{
+            color: var(--dh-text);
+            font-size: 1.9rem;
+            font-weight: 800;
+            line-height: 1.05;
+            letter-spacing: -.03em;
+        }}
+
+        .dh-stack-note,
+        .dh-metric-note {{
+            color: var(--dh-muted);
+            font-size: .72rem;
+            margin-top: .34rem;
+            line-height: 1.35;
+        }}
+
+        .dh-metric-tile {{
+            position: relative;
+            min-height: 132px;
+            padding: .95rem 1rem 1rem;
+            border: 1px solid var(--dh-border);
+            border-radius: 18px;
+            background: var(--dh-surface);
+            box-shadow: 0 12px 26px rgba({tr},{tg},{tb}, .03);
+        }}
+
+        .dh-metric-accent {{
+            margin-top: .7rem;
+            display: inline-flex;
+            align-items: center;
+            padding: .26rem .54rem;
+            border-radius: 999px;
+            background: rgba({pr},{pg},{pb}, .10);
+            color: var(--dh-primary);
+            font-size: .71rem;
+            font-weight: 700;
+        }}
+
+        .dh-section-head {{
+            margin: 1.35rem 0 .75rem;
+        }}
+
+        .dh-section-kicker {{
+            color: var(--dh-primary);
+            font-size: .68rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: .1em;
+            margin-bottom: .28rem;
+        }}
+
+        .dh-section-title {{
+            color: var(--dh-text);
+            font-size: 1.15rem;
+            font-weight: 780;
+            line-height: 1.18;
+            letter-spacing: -.02em;
+        }}
+
+        .dh-section-subtitle {{
+            color: var(--dh-muted);
+            font-size: .83rem;
+            margin-top: .18rem;
+            line-height: 1.4;
+        }}
+
+        .dh-chart-title {{
+            color: var(--dh-text);
+            font-size: .88rem;
+            font-weight: 720;
+            margin-bottom: .25rem;
+        }}
+
+        @media (max-width: 900px) {{
+            .dh-top-band {{
+                flex-direction: column;
+            }}
+
+            .dh-top-band-badge {{
+                min-width: 0;
+                width: 100%;
+            }}
+        }}
+
         @media (max-width: 900px) {{
             section[data-testid="stSidebar"] {{
                 min-width: min({sidebar_width}px, 86vw);
