@@ -22,6 +22,7 @@ from src.ui import (
     sidebar_footer,
     sidebar_identity,
     sidebar_navigation,
+    render_main_navigation,
 )
 from src.pages import (
     account,
@@ -43,7 +44,8 @@ st.set_page_config(
     page_title=APP_NAME,
     page_icon=":material/directions_car:",
     layout="wide",
-    initial_sidebar_state="expanded",
+    # Na tela de login, a sidebar deve permanecer fechada.
+    initial_sidebar_state="collapsed",
 )
 
 initialize_session()
@@ -95,6 +97,10 @@ if (
 if not st.session_state.get("authenticated"):
     render_login(db, appearance_obj)
     st.stop()
+
+# Ao autenticar, mantem o menu aberto no desktop. O Streamlit >= 1.59
+# garante esse comportamento nativamente, inclusive em sessoes ja recolhidas.
+st.set_page_config(initial_sidebar_state="locked")
 
 user = st.session_state.auth_user
 touch_session()
@@ -197,6 +203,10 @@ if st.sidebar.button(
     st.rerun()
 
 sidebar_footer()
+
+# Menu independente da sidebar: permanece acessivel no celular e em caso
+# de estado antigo persistido pelo navegador. Respeita as permissoes de nav.
+render_main_navigation(nav, selected)
 
 if user.get("must_change_password") and selected != "account":
     st.warning(

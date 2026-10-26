@@ -10,19 +10,47 @@ from .config import ROLES
 
 
 NAV_ICONS = {
-    "dashboard": "◫",
-    "customers": "👥",
-    "vehicles": "🚘",
-    "revisions": "🛣️",
-    "loyalty": "🏅",
-    "services": "🛠️",
-    "import": "📥",
-    "users": "👤",
-    "audit": "🧾",
-    "settings": "⚙️",
-    "appearance": "🎨",
-    "account": "🙍",
+    "dashboard": ":material/dashboard:",
+    "customers": ":material/groups:",
+    "vehicles": ":material/directions_car:",
+    "revisions": ":material/route:",
+    "loyalty": ":material/verified:",
+    "services": ":material/build:",
+    "import": ":material/upload_file:",
+    "users": ":material/manage_accounts:",
+    "audit": ":material/fact_check:",
+    "settings": ":material/settings:",
+    "appearance": ":material/palette:",
+    "account": ":material/account_circle:",
 }
+
+# Vetores locais: dispensam fontes ou bibliotecas externas para o item ativo.
+NAV_SVG_PATHS = {
+    "dashboard": '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+    "customers": '<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2"/><path d="M17 5a3 3 0 0 1 0 6M17 14a5 5 0 0 1 4 5v1"/>',
+    "vehicles": '<path d="M5 17H3v-5l3-6h12l3 6v5h-2"/><path d="M5 17h14M3 12h18"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/>',
+    "revisions": '<circle cx="5" cy="5" r="2"/><circle cx="19" cy="19" r="2"/><path d="M7 5h7a5 5 0 0 1 0 10H9a4 4 0 0 0 0 8h8"/>',
+    "loyalty": '<path d="m12 2 3 6 6.5 1-4.7 4.6 1.1 6.4L12 17l-5.9 3 1.1-6.4L2.5 9 9 8z"/>',
+    "services": '<path d="M14 7a5 5 0 0 1-7 7l-4 4a2 2 0 0 0 3 3l4-4a5 5 0 0 0 7-7l-3 3-3-3z"/>',
+    "import": '<path d="M12 3v12m-5-5 5 5 5-5M4 17v4h16v-4"/>',
+    "users": '<circle cx="9" cy="8" r="3"/><path d="M3 20v-2a6 6 0 0 1 12 0v2M17 9h5m-2.5-2.5v5"/>',
+    "audit": '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 8h6M9 12h6m-6 4 2 2 4-4"/>',
+    "settings": '<circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/>',
+    "appearance": '<path d="M12 3a9 9 0 1 0 9 9c0-2-2-3-4-3h-2a2 2 0 0 1-2-2V5a2 2 0 0 0-1-2z"/><circle cx="7" cy="12" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="17" cy="13" r="1"/>',
+    "account": '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+}
+
+
+def _nav_icon_svg(key: str) -> str:
+    path = NAV_SVG_PATHS.get(key, NAV_SVG_PATHS["dashboard"])
+    return (
+        '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" '
+        'stroke="currentColor" stroke-width="1.8" stroke-linecap="round" '
+        'stroke-linejoin="round" aria-hidden="true">'
+        + path
+        + '</svg>'
+    )
+
 
 
 def _rgb(hex_color: str) -> tuple[int, int, int]:
@@ -108,39 +136,93 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
         }}
 
         /* -------------------------------------------------
-           CONTROLE DE SIDEBAR - SEMPRE VISIVEL
+           SIDEBAR - CONTROLE RESILIENTE EM VERSOES RECENTES
+           No desktop usamos initial_sidebar_state="locked".
+           Em viewports moveis o controle nativo continua acessivel.
         ------------------------------------------------- */
+        [data-testid="stSidebarCollapsedControl"],
         [data-testid="collapsedControl"] {{
-            position: fixed;
-            top: .9rem;
-            left: .95rem;
-            z-index: 1002;
-            display: flex !important;
+            position: fixed !important;
+            top: .85rem !important;
+            left: .92rem !important;
+            z-index: 100005 !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
         }}
 
+        [data-testid="stSidebarCollapsedControl"] button,
         [data-testid="collapsedControl"] button,
-        section[data-testid="stSidebar"] button[kind="headerNoPadding"] {{
-            width: 2.7rem !important;
-            min-width: 2.7rem !important;
-            height: 2.7rem !important;
-            border-radius: 14px !important;
-            border: 1px solid rgba(255,255,255,.10) !important;
-            background: rgba(15, 23, 42, .96) !important;
+        [data-testid="stSidebarCollapseButton"] button {{
+            min-height: 2.6rem !important;
+            min-width: 2.6rem !important;
+            border-radius: 12px !important;
+            border: 1px solid rgba(255,255,255,.14) !important;
+            background: #111827 !important;
             color: #F8FAFC !important;
-            box-shadow: 0 14px 34px rgba(2, 6, 23, .22) !important;
+            box-shadow: 0 10px 24px rgba(2, 6, 23, .22) !important;
+            visibility: visible !important;
+            pointer-events: auto !important;
         }}
 
+        [data-testid="stSidebarCollapsedControl"] button:hover,
         [data-testid="collapsedControl"] button:hover,
-        section[data-testid="stSidebar"] button[kind="headerNoPadding"]:hover {{
-            border-color: rgba({pr},{pg},{pb}, .60) !important;
-            background: rgba(15, 23, 42, 1) !important;
-            color: #FFFFFF !important;
+        [data-testid="stSidebarCollapseButton"] button:hover {{
+            background: #1F2937 !important;
+            border-color: var(--dh-primary) !important;
         }}
 
+        [data-testid="stSidebarCollapsedControl"] svg,
         [data-testid="collapsedControl"] svg,
-        section[data-testid="stSidebar"] button[kind="headerNoPadding"] svg {{
-            width: 1rem !important;
-            height: 1rem !important;
+        [data-testid="stSidebarCollapseButton"] svg {{
+            color: #F8FAFC !important;
+            fill: none;
+        }}
+
+        header[data-testid="stHeader"] {{
+            z-index: 100001 !important;
+            pointer-events: auto !important;
+        }}
+
+        /* Barra de navegacao acessivel mesmo sem a barra lateral. */
+        .dh-nav-top-title {{
+            color: var(--dh-text);
+            font-size: .75rem;
+            font-weight: 730;
+            text-transform: uppercase;
+            letter-spacing: .09em;
+        }}
+
+        .dh-nav-top-subtitle {{
+            color: var(--dh-muted);
+            font-size: .72rem;
+            margin-top: .15rem;
+        }}
+
+        .st-key-dh_main_nav_bar {{
+            padding: .68rem .85rem;
+            margin: 0 0 1.15rem;
+            border: 1px solid var(--dh-border);
+            border-radius: calc(var(--dh-radius) + 4px);
+            background: var(--dh-surface);
+            box-shadow: 0 6px 18px rgba({tr},{tg},{tb}, .035);
+        }}
+
+        .st-key-dh_main_nav_bar button {{
+            font-weight: 650 !important;
+            min-height: 2.55rem;
+        }}
+
+        .st-key-dh_main_nav_bar [data-testid="stPopover"] > button {{
+            background: var(--dh-sidebar) !important;
+            border: 1px solid var(--dh-sidebar) !important;
+            color: var(--dh-sidebar-text) !important;
+            box-shadow: none !important;
+        }}
+
+        .st-key-dh_main_nav_bar [data-testid="stPopover"] > button:hover {{
+            border-color: var(--dh-primary) !important;
+            background: var(--dh-sidebar) !important;
         }}
 
         /* -------------------------------------------------
@@ -648,9 +730,10 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
                 padding-top: 4.15rem !important;
             }}
 
+            [data-testid="stSidebarCollapsedControl"],
             [data-testid="collapsedControl"] {{
-                top: .85rem;
-                left: .85rem;
+                top: .85rem !important;
+                left: .85rem !important;
             }}
         }}
         </style>
@@ -789,21 +872,20 @@ def sidebar_navigation(items: list[dict[str, str]]) -> str:
         )
 
         for item in [x for x in items if (x.get("group") or "Navegação") == group]:
-            icon = _nav_icon(item["key"])
             if item["key"] == selected:
                 st.sidebar.markdown(
                     f"""
                     <div class="dh-nav-active">
-                      <span class="dh-nav-icon">{html.escape(icon)}</span>
+                      <span class="dh-nav-icon">{_nav_icon_svg(item["key"])}</span>
                       <span>{html.escape(item["label"])}</span>
                     </div>
                     """,
                     unsafe_allow_html=True,
                 )
             else:
-                label = f"{icon}  {item['label']}"
                 if st.sidebar.button(
-                    label,
+                    item["label"],
+                    icon=_nav_icon(item["key"]),
                     key=f"dh_nav_{item['key']}",
                     use_container_width=True,
                 ):
@@ -811,11 +893,72 @@ def sidebar_navigation(items: list[dict[str, str]]) -> str:
                     st.rerun()
 
     st.sidebar.markdown(
-        '<div class="dh-quick-note">Use o botão no canto superior esquerdo para recolher ou reabrir o menu quando quiser.</div>',
+        '<div class="dh-quick-note">O menu permanece aberto no desktop. Em telas menores, use o botão do Streamlit ou Navegação no topo.</div>',
         unsafe_allow_html=True,
     )
     return str(st.session_state["dh_active_page"])
 
+
+
+
+def render_main_navigation(items: list[dict[str, str]], selected: str) -> None:
+    """Navegacao alternativa, independente do estado visual da sidebar.
+
+    Compartilha a chave dh_active_page com sidebar_navigation e so mostra
+    paginas previamente filtradas pelas permissoes do usuario em app.py.
+    """
+    if not items:
+        return
+
+    current = next((item for item in items if item["key"] == selected), items[0])
+    import_allowed = any(item["key"] == "import" for item in items)
+
+    with st.container(key="dh_main_nav_bar"):
+        left, center, right = st.columns([2.2, 5.2, 2.2], vertical_alignment="center")
+
+        with left:
+            with st.popover("☰  Navegação", use_container_width=True):
+                st.caption("Acesse qualquer página liberada para o seu perfil.")
+                previous_group = None
+                for item in items:
+                    group = item.get("group") or "Navegação"
+                    if group != previous_group:
+                        st.caption(group.upper())
+                        previous_group = group
+                    if st.button(
+                        item["label"],
+                        icon=_nav_icon(item["key"]),
+                        key=f"dh_top_nav_{item['key']}",
+                        use_container_width=True,
+                        disabled=item["key"] == selected,
+                    ):
+                        st.session_state["dh_active_page"] = item["key"]
+                        st.rerun()
+
+        with center:
+            st.markdown(
+                '<div class="dh-nav-top-title">DEALER HUB / '
+                + html.escape(current["label"])
+                + '</div><div class="dh-nav-top-subtitle">'
+                + 'Navegação rápida disponível mesmo em telas menores.'
+                + '</div>',
+                unsafe_allow_html=True,
+            )
+
+        with right:
+            if import_allowed:
+                if st.button(
+                    "Importações",
+                    icon=":material/upload_file:",
+                    key="dh_top_import_shortcut",
+                    use_container_width=True,
+                    type="primary" if selected == "import" else "secondary",
+                    disabled=selected == "import",
+                ):
+                    st.session_state["dh_active_page"] = "import"
+                    st.rerun()
+            else:
+                st.caption("Acesso conforme seu perfil")
 
 
 def sidebar_footer() -> None:
