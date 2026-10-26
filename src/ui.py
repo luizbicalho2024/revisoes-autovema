@@ -22,6 +22,7 @@ NAV_ICONS = {
     "settings": ":material/settings:",
     "appearance": ":material/palette:",
     "account": ":material/account_circle:",
+    "debug": ":material/bug_report:",
 }
 
 # Vetores locais: dispensam fontes ou bibliotecas externas para o item ativo.
@@ -38,6 +39,7 @@ NAV_SVG_PATHS = {
     "settings": '<circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/>',
     "appearance": '<path d="M12 3a9 9 0 1 0 9 9c0-2-2-3-4-3h-2a2 2 0 0 1-2-2V5a2 2 0 0 0-1-2z"/><circle cx="7" cy="12" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="17" cy="13" r="1"/>',
     "account": '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
+    "debug": '<circle cx="12" cy="12" r="7"/><path d="M9 8h6M9 12h6M9 16h6"/>',
 }
 
 
@@ -1145,14 +1147,8 @@ def render_main_navigation(items: list[dict[str, str]], selected: str) -> None:
                         st.rerun()
 
         with center:
-            st.markdown(
-                '<div class="dh-nav-top-title">DEALER HUB / '
-                + html.escape(current["label"])
-                + '</div><div class="dh-nav-top-subtitle">'
-                + 'Navegação rápida disponível mesmo em telas menores.'
-                + '</div>',
-                unsafe_allow_html=True,
-            )
+            # Área propositalmente livre: nenhum cabeçalho redundante.
+            st.empty()
 
         with right:
             if import_allowed:

@@ -42,6 +42,15 @@ def render(db: Database, user: dict) -> None:
         "Controle da 1ª à 5ª revisão com sugestões conciliadas a partir das ordens de serviço.",
     )
 
+    from ..revision_views import load_five, summary_cards
+    data = load_five(db, user)
+    summary_cards(data["rows"])
+    st.caption("Etapas realizadas resultam de registros da jornada ou de serviço em OS ROF080 "
+               "comprovada. Indícios em observações permanecem pendentes até validação.")
+    with st.expander("Mapa das cinco revisões de toda a frota"):
+        from ..revision_views import five_table
+        five_table(data["rows"], user, key="journey_summary", show_details=False)
+
     scope = scoped_filter(user)
     f1, f2, f3 = st.columns([2, 1, 1])
     with f1:

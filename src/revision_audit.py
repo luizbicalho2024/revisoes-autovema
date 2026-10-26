@@ -1,8 +1,6 @@
-"""Leitura conservadora das cinco primeiras revisões por jornada/veículo.
+"""Conciliação de revisões comprovadas na jornada E em OS ROF080.
 
-Somente `revisions.status == realizada` equivale a revisão comprovada.
-Uma revisão posterior confirmada sem anterior é uma *lacuna de evidência*,
-não uma evasão comprovada. O módulo não grava nem altera registros.
+Não promove observações ou manutenção genérica a revisão. Leitura sem escrita.
 """
 from __future__ import annotations
 
@@ -62,6 +60,30 @@ def _event_confirmed(e: dict[str, Any]) -> bool:
     )
 
 
+def verified_service_event(event: dict[str, Any]) -> bool:
+    """Confirma uma revisão pela própria evidência ROF080 já importada.
+
+    Obrigatório: veículo na base, OS encerrada, posterior à venda,
+    etapa identificada e vínculo confiável. Revisão manual confirmada
+    preserva confirmação humana; texto de observação isolado não serve.
+    """
+    if event.get("review_override") == "descartada":
+        return False
+    if not event.get("vehicle_id") or not event.get("closed_at"):
+        return False
+    if event.get("post_sale") is not True or event.get("owner_match") is False:
+        return False
+    if event.get("link_status") != "matched":
+        return False
+    if _stage_from_event(event) is None:
+        return False
+    if event.get("review_override") == "confirmada":
+        return True
+    return (event.get("classification") == "confirmada"
+            and event.get("confidence") == "servico"
+            and event.get("evidence_source") != "observacao")
+
+
 def _stage_from_event(e: dict[str, Any]) -> int | None:
     number = e.get("manual_revision_number") if e.get("review_override") == "confirmada" else e.get("revision_number")
     try:
@@ -119,8 +141,20 @@ def summarize_journeys(
         vehicle = vehicles.get(vid, {})
         customer = customers.get(_id(journey.get("customer_id")), {})
         planned = plans.get(vid, {})
+        verified_events: dict[int, dict[str, Any]] = {}
+        for event in event_by_vehicle.get(vid, []):
+            if verified_service_event(event):
+                stage = _stage_from_event(event)
+                # Decisões explícitas da jornada não são revertidas por leitura do histórico.
+                if planned.get(stage, {}).get("status") in {"externa_perdida", "cancelada", "nao_aplicavel"}:
+                    continue
+                if stage not in verified_events or (
+                    str(event.get("service_date") or "") < str(verified_events[stage].get("service_date") or "")
+                ):
+                    verified_events[stage] = event
         completed = {
-            n for n in STAGES if planned.get(n, {}).get("status") == "realizada"
+            n for n in STAGES
+            if planned.get(n, {}).get("status") == "realizada" or n in verified_events
         }
         confirmed_5 = len(completed) == 5
         gaps = {
@@ -134,7 +168,7 @@ def summarize_journeys(
             candidate = evidence.get(vid, {}).get(n, [])
             open_evidence = [e for e in candidate if not _event_confirmed(e)]
             due = _date(rev.get("due_date"))
-            if raw == "realizada":
+            if raw == "realizada" or n in verified_events:
                 state = "realizada"
             elif raw == "externa_perdida":
                 state = "externa"
@@ -168,10 +202,11 @@ def summarize_journeys(
                 "state": state,
                 "status": STAGE_LABELS[state],
                 "due_date": due,
-                "performed_at": _date(rev.get("performed_at")),
-                "performed_km": rev.get("performed_km"),
-                "source": rev.get("source"),
-                "service_order_id": rev.get("service_order_id"),
+                "performed_at": _date(rev.get("performed_at") or verified_events.get(n, {}).get("service_date")),
+                "performed_km": rev.get("performed_km") if rev.get("performed_km") is not None else verified_events.get(n, {}).get("os_km"),
+                "source": rev.get("source") if raw == "realizada" else ("rof080_confirmado" if n in verified_events else rev.get("source")),
+                "service_order_id": rev.get("service_order_id") if raw == "realizada" else (verified_events.get(n, {}).get("service_order_id") or rev.get("service_order_id")),
+                "verified_event": verified_events.get(n),
                 "candidate_service_order_id": rev.get("candidate_service_order_id"),
                 "events": candidate,
                 "revision": rev,
@@ -206,6 +241,7 @@ def summarize_journeys(
             "sale_date": _date(journey.get("sale_date")),
             "journey_status": journey.get("status"),
             "completed": len(completed),
+            "completed_from_rof080": sum(1 for n in verified_events if planned.get(n, {}).get("status") != "realizada"),
             "has_gap": has_gaps,
             "gap_stages": sorted(gaps),
             "has_external": lost,

@@ -1,8 +1,4 @@
-"""Visão Geral centrada exclusivamente nas cinco revisões da jornada.
-
-Leitura somente; usa os status já registrados em revisions, sem inferir que
-uma OS ou menção textual representa revisão concluída.
-"""
+"""Painel das cinco revisões com OS ROF080 verificadas e jornada integrada."""
 from __future__ import annotations
 
 import html
@@ -74,6 +70,7 @@ def _load_audit(db: Database, user: dict[str, Any], active_only: bool) -> tuple[
             "os_number": 1, "service_date": 1, "confidence": 1,
             "evidence_text": 1, "link_status": 1, "closed_at": 1,
             "owner_match": 1, "post_sale": 1,
+            "evidence_source": 1, "service_order_id": 1, "os_km": 1,
         }))
     for batch in _chunks(customer_ids):
         for c in db.customers.find({"_id": {"$in": batch}}, {"name": 1}):
@@ -197,14 +194,9 @@ def render(db: Database, user: dict[str, Any]) -> None:
         "Painel das 5 revisões",
         "Quem realizou cada revisão, quem completou o ciclo e onde existem lacunas a investigar.",
     )
-    st.markdown(
-        '<div class="dh-revision-focus-note">'
-        '<strong>Critério de comprovação:</strong> somente revisão registrada como realizada na jornada. '
-        'Manutenções genéricas e menções em observações ficam separadas para conferência. '
-        'Uma lacuna não significa necessariamente que o cliente deixou de fazer a revisão.'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+    st.caption("Revisões comprovadas pela jornada ou por serviço identificado em OS ROF080 "
+               "encerrada, vinculada ao veículo e posterior à venda. "
+               "Lacunas e observações sem confirmação aparecem separadamente.")
 
     active_only = st.toggle("Apenas jornadas ativas", value=True, key="dh_five_active")
     try:

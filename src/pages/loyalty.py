@@ -1,3 +1,4 @@
+"""Fidelidade e cinco revisões com distinção entre medição e bônus persistido."""
 from __future__ import annotations
 
 import pandas as pd
@@ -5,43 +6,51 @@ import streamlit as st
 from pymongo.database import Database
 
 from ..repositories import scoped_filter
+from ..revision_audit import STAGES
+from ..revision_views import load_five, five_table
+from ..security import can
 from ..ui import page_header
 
 
+def _fmt(value) -> str:
+    return f"{float(value or 0):.0f}%"
+
+
 def render(db: Database, user: dict) -> None:
-    page_header(
-        "Fidelidade / Recompra Garantida",
-        "Elegibilidade progressiva conforme a realização integral das revisões na concessionária.",
-    )
-    st.info("Regra do MVP: 3ª revisão = 1%, 4ª = 2% e 5ª ou mais = 3% de bônus sobre a avaliação FIPE, desde que não exista evasão em nenhuma revisão obrigatória.")
+    page_header("Fidelidade · 5 revisões", "Compare o histórico efetivo das etapas com a bonificação atualmente registrada.")
+    st.caption("Regra vigente preservada: 3ª = 1%, 4ª = 2%, 5ª = 3%, desde que cumpridas as condições do programa e sem evasão obrigatória.")
+    data = load_five(db,user)
+    rows = data["rows"]
+    valid_ids = [r["vehicle_id"] for r in rows]
+    journeys = {}
+    for i in range(0,len(valid_ids),400):
+        for j in db.journeys.find({"vehicle_id":{"$in":valid_ids[i:i+400]}, **scoped_filter(user)},
+                                  {"vehicle_id":1,"loyalty_bonus_pct":1,"loyalty_cancelled":1,"loyalty_cancel_reason":1,"current_revision":1}):
+            journeys[str(j["vehicle_id"])]=j
+    records=[]
+    for r in rows:
+        j=journeys.get(r["vehicle_id"],{})
+        records.append({"Cliente":r["customer_name"],"Placa":r["plate"],"Modelo":r["model"],
+            "Revisões comprovadas":r["completed"],
+            "Consecutivas":sum(1 for n in STAGES if all(r["stages"][i]["state"]=="realizada" for i in range(1,n+1))),
+            "Bônus gravado":_fmt(j.get("loyalty_bonus_pct")),
+            "Programa cancelado":"Sim" if j.get("loyalty_cancelled") else "Não",
+            "Motivo":j.get("loyalty_cancel_reason") or "—",
+            "Lacunas":"Sim" if r["has_gap"] else "Não",
+            "ROF080 confirmadas fora do plano":r.get("completed_from_rof080",0)})
+    a,b,c=st.columns(3)
+    a.metric("Veículos avaliados",len(records))
+    b.metric("5 revisões comprovadas",sum(r["completed"]==5 for r in rows))
+    c.metric("Revisões ROF080 ainda fora do plano",sum(r.get("completed_from_rof080",0) for r in rows))
+    st.caption("A V7 não recalcula nem concede bônus automaticamente com base no BI. Diferenças entre OS confirmada e plano devem ser auditadas antes de atualizar os benefícios.")
+    if records:
+        st.dataframe(pd.DataFrame(records),hide_index=True,use_container_width=True)
+        if can(user,"reports.export"):
+            from ..revision_audit import csv_bytes
+            st.download_button("Exportar elegibilidade",csv_bytes(records),"fidelidade_5_revisoes.csv","text/csv",key="loyalty_five_export")
+    with st.expander("Ver situação de cada revisão por veículo"):
+        five_table(rows,user,key="loyalty",show_details=False)
 
-    query = {"status": "ativa", **scoped_filter(user)}
-    filter_bonus = st.multiselect("Bônus atual", [0, 1, 2, 3], default=[0, 1, 2, 3], format_func=lambda x: f"{x}%")
-    if filter_bonus:
-        query["loyalty_bonus_pct"] = {"$in": [float(x) for x in filter_bonus]}
-
-    journeys = list(db.journeys.find(query).sort([("loyalty_bonus_pct", -1), ("sale_date", -1)]).limit(1000))
-    if not journeys:
-        st.info("Nenhuma jornada encontrada para os filtros selecionados.")
-        return
-
-    vehicle_map = {v["_id"]: v for v in db.vehicles.find({"_id": {"$in": [j["vehicle_id"] for j in journeys]}})}
-    customer_map = {c["_id"]: c for c in db.customers.find({"_id": {"$in": [j.get("customer_id") for j in journeys]}})}
-    rows = []
-    for j in journeys:
-        vehicle = vehicle_map.get(j["vehicle_id"], {})
-        customer = customer_map.get(j.get("customer_id"), {})
-        rows.append({
-            "Cliente": customer.get("name"),
-            "CPF/CNPJ": customer.get("document"),
-            "Placa": vehicle.get("plate"),
-            "Modelo": vehicle.get("model"),
-            "Revisão consecutiva": j.get("current_revision", 0),
-            "Bônus": f"{float(j.get('loyalty_bonus_pct') or 0):.0f}%",
-            "Cancelado": "Sim" if j.get("loyalty_cancelled") else "Não",
-            "Motivo": j.get("loyalty_cancel_reason"),
-            "Compra": j.get("sale_date"),
-        })
-    df = pd.DataFrame(rows)
-    st.dataframe(df, hide_index=True, use_container_width=True)
-    st.download_button("Baixar elegibilidade em CSV", df.to_csv(index=False).encode("utf-8-sig"), "elegibilidade_recompra.csv", "text/csv")
+    with st.expander("Consulta tradicional dos bônus gravados"):
+        from . import loyalty_legacy
+        loyalty_legacy.render(db,user)

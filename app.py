@@ -30,6 +30,7 @@ from src.pages import (
     audit,
     customers,
     dashboard,
+    debug,
     import_page,
     loyalty,
     revisions,
@@ -183,6 +184,9 @@ if can(user, "settings.manage"):
         }
     )
 
+if user.get("role") == "superadmin":
+    nav.append({"label": "Diagnóstico de Dados", "key": "debug", "group": "Administração"})
+
 nav.append(
     {
         "label": "Minha Conta",
@@ -216,6 +220,7 @@ if user.get("must_change_password") and selected != "account":
 
 PAGES = {
     "dashboard": dashboard.render,
+    "debug": debug.render,
     "customers": customers.render,
     "vehicles": vehicles.render,
     "revisions": revisions.render,
