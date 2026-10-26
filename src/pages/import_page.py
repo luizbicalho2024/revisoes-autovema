@@ -13,6 +13,10 @@ from ..service_importer import (
     preview_service_orders,
 )
 from ..ui import page_header
+from ..revision_taxonomy import read_catalog
+from ..rof080_importer import import_rof080, preview_rof080
+from ..repositories import audit
+from datetime import datetime, timezone
 
 
 def _already_imported(db: Database, file_bytes: bytes, import_type: str | None = None):
@@ -217,6 +221,73 @@ def _render_service_tab(db: Database, user: dict) -> None:
         )
 
 
+def _render_catalog_tab(db: Database, user: dict) -> None:
+    st.markdown("### Catálogo de códigos de revisão")
+    st.caption("Importe os códigos locais da planilha anomalias_revisao.xlsx. "
+               "Os 23 códigos conhecidos já são suportados; reimportar o catálogo os atualiza.")
+    uploaded = st.file_uploader("Catálogo de anomalias (.xlsx)", type=["xlsx"], key="revision_catalog")
+    if not uploaded:
+        st.metric("Códigos personalizados cadastrados", db.revision_catalog.count_documents({}))
+        return
+    try:
+        rows = read_catalog(uploaded.getvalue())
+    except Exception as exc:
+        st.error(f"Erro ao ler catálogo: {exc}")
+        return
+    st.dataframe(pd.DataFrame(rows).head(35), hide_index=True, use_container_width=True)
+    if st.button("Importar/atualizar códigos", type="primary", key="catalog_save"):
+        now = datetime.now(timezone.utc)
+        for row in rows:
+            db.revision_catalog.update_one({"_id": row["code"]},
+                {"$set": {"description": row["description"], "updated_at": now,
+                          "updated_by": user.get("email")}}, upsert=True)
+        audit(db, user, "revision_catalog_imported", "revision_catalog", "catalog",
+              {"codes": len(rows)})
+        st.success(f"{len(rows)} códigos de revisão cadastrados/atualizados.")
+
+
+def _render_rof080_tab(db: Database, user: dict) -> None:
+    st.markdown("### ROF080 – Histórico de serviços de oficina")
+    st.caption("Importe a planilha AUTOVEMA PVH.xlsx. Agrupamos itens pela OS e "
+               "identificamos revisões pelas linhas de serviço, pelo catálogo e "
+               "pelas observações. Só OS encerrada e vinculada ao veículo pode ser "
+               "confirmada automaticamente. Observações isoladas exigem conferência.")
+    uploaded = st.file_uploader("ROF080 (.xlsx)", type=["xlsx"], key="rof080_upload")
+    if not uploaded:
+        return
+    content = uploaded.getvalue()
+    try:
+        preview = preview_rof080(content)
+    except Exception as exc:
+        st.error(f"Planilha ROF080 inválida: {exc}")
+        return
+    st.dataframe(pd.DataFrame(preview), hide_index=True, use_container_width=True)
+    imported = _already_imported(db, content, "rof080")
+    if imported:
+        st.info("Este mesmo arquivo já foi importado integralmente. Não será processado novamente.")
+    confirm = st.checkbox("Confirmo que a planilha contém dados operacionais autorizados.", key="rof080_confirm")
+    if st.button("Importar histórico e calcular revisões", type="primary", key="rof080_process",
+                 use_container_width=True, disabled=not confirm or bool(imported)):
+        status = st.empty()
+        def progress(n: int) -> None:
+            status.caption(f"Linhas analisadas: {n:,}".replace(",", "."))
+        try:
+            with st.spinner("Processando arquivo grande, consolidando OS e vinculando revisões..."):
+                summary = import_rof080(db, content, uploaded.name, user, progress=progress)
+        except Exception as exc:
+            st.error(f"Importação interrompida: {exc}")
+            return
+        status.empty()
+        st.success("Importação ROF080 concluída; dados disponíveis nas métricas.")
+        cols = st.columns(4)
+        cols[0].metric("Linhas", summary.get("rows_received", 0))
+        cols[1].metric("OS distintas", summary.get("unique_orders", 0))
+        cols[2].metric("Revisões comprovadas", summary.get("confirmed_revisions", 0))
+        cols[3].metric("Para análise", summary.get("orders_with_revision_signal", 0)
+                       - summary.get("confirmed_revisions", 0))
+        st.json(summary, expanded=False)
+
+
 def render(db: Database, user: dict) -> None:
     require_permission(user, "import.execute")
     page_header(
@@ -224,8 +295,8 @@ def render(db: Database, user: dict) -> None:
         "Atualize a base comercial e o histórico de pós-venda sem duplicidade.",
     )
 
-    rel_tab, service_tab = st.tabs(
-        ["REL_VEICULOS", "OS / Serviços"]
+    rel_tab, service_tab, catalog_tab, rof080_tab = st.tabs(
+        ["REL_VEICULOS", "ROF001 / OS", "Códigos de revisão", "ROF080 / Histórico"]
     )
 
     with rel_tab:
@@ -233,3 +304,9 @@ def render(db: Database, user: dict) -> None:
 
     with service_tab:
         _render_service_tab(db, user)
+
+    with catalog_tab:
+        _render_catalog_tab(db, user)
+
+    with rof080_tab:
+        _render_rof080_tab(db, user)

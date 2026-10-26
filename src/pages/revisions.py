@@ -12,6 +12,7 @@ from ..maintenance import reconcile_vehicle_service_history
 from ..repositories import audit, scoped_filter
 from ..security import can
 from ..ui import page_header
+from ..revision_review import review_event
 
 
 def _vehicle_label(
@@ -153,6 +154,59 @@ def render(db: Database, user: dict) -> None:
             "Situação de manutenção: "
             + journey.get("maintenance_status_reason")
         )
+
+    st.markdown("### Revisões detectadas em OS (histórico completo)")
+    revision_events = list(db.revision_events.find(
+        {"vehicle_id": journey["vehicle_id"]},
+        {"_id": 0, "os_number": 1, "service_date": 1, "revision_number": 1,
+         "classification": 1, "confidence": 1, "os_km": 1, "evidence_text": 1},
+    ).sort("service_date", -1).limit(300))
+    if revision_events:
+        st.dataframe(pd.DataFrame([
+            {"OS": event.get("os_number"), "Data": event.get("service_date"),
+             "Revisão": f"{event['revision_number']}ª" if event.get("revision_number") else "A identificar",
+             "Situação": event.get("classification"), "Evidência": event.get("confidence"),
+             "KM": event.get("os_km"), "Descrição": event.get("evidence_text")}
+            for event in revision_events
+        ]), hide_index=True, use_container_width=True)
+        st.caption("Histórico acima da 5ª revisão é exibido aqui sem alterar as regras "
+                   "contratuais do programa de fidelidade (1ª à 5ª).")
+    else:
+        st.caption("Nenhuma revisão ROF080 localizada para este veículo.")
+
+    if can(user, "journey.edit") and revision_events:
+        pending_events = list(db.revision_events.find({
+            "vehicle_id": journey["vehicle_id"], "classification": "verificar",
+            "review_override": {"$nin": ["confirmada", "descartada"]},
+        }).sort("service_date", -1).limit(30))
+        if pending_events:
+            with st.expander(f"Validar evidências pendentes ({len(pending_events)} exibidas)"):
+                labels = [
+                    f"OS {item.get('os_number')} • {_fmt_date(item.get('service_date'))}"
+                    f" • {item.get('evidence_text') or 'Revisão não classificada'}"
+                    for item in pending_events
+                ]
+                chosen = st.selectbox("Evidência", range(len(pending_events)),
+                                      format_func=lambda n: labels[n], key="rof080_event_selector")
+                event = pending_events[chosen]
+                value = int(event.get("revision_number") or 1)
+                value = value if 1 <= value <= 18 else 1
+                stage = st.selectbox("Etapa da revisão após conferência", list(range(1, 19)),
+                                     index=value - 1, format_func=lambda n: f"{n}ª",
+                                     key=f"rof080_stage_{event['_id']}")
+                st.caption("Confirme apenas se a OS encerrada comprova a realização da "
+                           "revisão e o cliente/veículo correspondem ao cadastro.")
+                yes, no = st.columns(2)
+                if yes.button("Confirmar revisão", type="primary", key=f"rof080_yes_{event['_id']}"):
+                    try:
+                        review_event(db, user, event["_id"], "confirmada", stage)
+                    except (ValueError, PermissionError) as exc:
+                        st.error(str(exc))
+                    else:
+                        st.rerun()
+                if no.button("Desconsiderar evidência", key=f"rof080_no_{event['_id']}"):
+                    review_event(db, user, event["_id"], "descartada")
+                    st.rerun()
 
     revisions = list(
         db.revisions.find(

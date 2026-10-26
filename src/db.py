@@ -173,6 +173,21 @@ def ensure_indexes(db: Database) -> None:
         name="ix_service_os_number",
     )
 
+    db.revision_catalog.create_index(
+        [("description", ASCENDING)], name="ix_revision_catalog_description"
+    )
+    db.revision_events.create_index(
+        [("company_code", ASCENDING), ("classification", ASCENDING),
+         ("revision_number", ASCENDING)], name="ix_revision_event_metrics"
+    )
+    db.revision_events.create_index(
+        [("vehicle_id", ASCENDING), ("service_date", DESCENDING)],
+        name="ix_revision_event_vehicle_date"
+    )
+    db.revision_events.create_index(
+        [("service_order_id", ASCENDING)], name="ix_revision_event_os"
+    )
+
     db.import_jobs.create_index(
         [("started_at", DESCENDING)],
         name="ix_import_started",

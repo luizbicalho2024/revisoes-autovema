@@ -128,3 +128,26 @@ streamlit run app.py
 ## Próximas integrações previstas pelo desenho do projeto
 
 A arquitetura já deixa separadas as camadas para futuras integrações de CRM/Syonet, WhatsApp oficial, NPS/CSAT, ordens de serviço e dados automáticos de revisões. Essas integrações não foram simuladas neste MVP porque os respectivos contratos de API e fontes de dados não estavam presentes na documentação fornecida.
+
+## Atualização ROF080 — Revisões detectadas a partir de serviços e anomalias
+
+A aba **Importações** contém dois fluxos novos, além do REL_VEICULOS e ROF001:
+
+1. **Códigos de revisão** — recebe `anomalias_revisao.xlsx` com `CÓDIGO LOCAL` e `DESCRIÇÃO`. Os 23 códigos do catálogo inicial já estão embutidos no código como referência não pessoal, e podem ser atualizados pela planilha.
+2. **ROF080 / Histórico** — recebe `AUTOVEMA PVH.xlsx` (Mala Direta – Serviços Oficina), consolida as linhas pela concessionária e número da OS, faz vínculo por **chassi** com os veículos importados e identifica revisões por código/descrição do serviço e por observação.
+
+**Ordem recomendada:** REL_VEICULOS → catálogo de códigos → ROF080. Não é necessário apagar as OS ROF001 previamente importadas. A importação ROF080 grava OS com chave distinta, vinculada à origem.
+
+**Regras de medição:**
+
+- Uma linha com ordinal explícito de revisão ou um código local classificado é uma **evidência de serviço**. Somente OS **encerrada**, **posterior à venda**, **com chassi identificado** e **proprietário conciliado** é registrada como revisão comprovada automaticamente.
+- Uma simples menção à revisão na observação, uma referência apenas à quilometragem (ex.: revisão de 20.000 km), um serviço ambíguo entre flex/diesel, OS aberta e cadastros não conciliados entram na fila de **conferência**, sem serem somados como revisões comprovadas.
+- A mesma OS não conta mais de uma vez no mesmo relatório. Reimportar um arquivo com SHA-256 já finalizado não duplica registros. OS de relatórios novos são atualizadas por identificador estável.
+- Em **Jornada de Revisões**, o histórico completo é exibido e um usuário com permissão de edição pode revisar um indício, indicar a etapa e confirmar ou desconsiderar. A decisão é auditada e sobrevive a outras importações. Uma confirmação exige OS encerrada e venda anterior à execução, sem divergência conhecida de proprietário.
+- O quadro **Visão Geral** exibe métricas por etapa, por mês e por nível de evidência. Revisões acima da 5ª aparecem no histórico de eventos, mas **não alteram o contrato de fidelidade da 1ª à 5ª**.
+- A importação só promove automaticamente a 1ª–5ª revisão na coleção `revisions` quando há comprovação operacional; não sobrescreve revisões já concluídas por decisão humana, evasões ou cancelamentos.
+- Prazos e KM previstos continuam dependentes das configurações homologadas. A importação não presume que toda revisão de 10.000 km seja a primeira em todas as marcas e motorizações.
+
+**Banco de dados:** adicionadas as coleções `revision_catalog` e `revision_events` com índices. Todas as gravações acontecem no MongoDB configurado pelo Streamlit, não durante a publicação do código. O ZIP original e as planilhas com dados de clientes **não devem ser enviados ao GitHub**.
+
+**Validação:** `python -m pytest -q` após instalar `pip install -r requirements.txt pytest`.

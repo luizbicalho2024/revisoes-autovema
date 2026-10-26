@@ -207,6 +207,10 @@ def render(db: Database, user: dict) -> None:
                     "Data": order.get("service_date"),
                     "KM": order.get("os_km"),
                     "Empresa": order.get("company_name"),
+                    "Origem": order.get("source") or "ROF001",
+                    "Revisão na OS": ((str((order.get("source_revision") or {}).get("revision_number")) + "ª")
+                                      if (order.get("source_revision") or {}).get("revision_number") else "—"),
+                    "Evidência": (order.get("source_revision") or {}).get("confidence"),
                     "Tipo": order.get("type_description"),
                     "Serviços": order.get("service_amount"),
                     "Produtos": order.get("product_amount"),

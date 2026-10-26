@@ -10,6 +10,7 @@ from ..appearance import get_appearance_settings
 from ..charts import column_chart, donut_chart, line_chart
 from ..repositories import array_scoped_filter, scoped_filter
 from ..ui import page_header
+from ..revision_metrics import get_revision_metrics
 
 
 MONTHS_PT = {
@@ -124,6 +125,42 @@ def render(db: Database, user: dict) -> None:
             hide_index=True,
             use_container_width=True,
         )
+
+    st.markdown("### Revisões identificadas no histórico ROF080")
+    st.caption("Revisões comprovadas usam linhas de serviço de OS encerradas, "
+               "vinculadas ao veículo e posteriores à venda. Apenas observações, "
+               "revisões sem ordinal e divergências permanecem para conferência.")
+    metrics = get_revision_metrics(db, user)
+    e1, e2, e3, e4 = st.columns(4)
+    e1.metric("OS com evidência", metrics["total"])
+    e2.metric("Revisões comprovadas", metrics["confirmed"])
+    e3.metric("Para conferência", metrics["pending"])
+    e4.metric("Com veículo vinculado", metrics["linked"])
+    if metrics["by_revision"]:
+        evolution, distribution = st.columns([1.2, 1])
+        with evolution:
+            st.markdown("**Volume de revisões por mês**")
+            monthly_values = metrics["monthly"][-24:]
+            if monthly_values:
+                line_chart(
+                    [{"categoria": row["_id"], "valor": int(row["total"])} for row in monthly_values],
+                    category_field="categoria", value_field="valor", appearance=appearance, height=285,
+                )
+        with distribution:
+            st.markdown("**Revisões por etapa (incluindo acima da 5ª)**")
+            st.dataframe(pd.DataFrame([
+                {"Etapa": f"{int(row['_id'])}ª", "OS comprovadas": row["orders"],
+                 "Veículos distintos": row["vehicles"]}
+                for row in metrics["by_revision"]
+            ]), hide_index=True, use_container_width=True)
+        with st.expander("Qualidade da classificação e pendências"):
+            st.dataframe(pd.DataFrame([
+                {"Evidência": row.get("_id") or "não classificada", "OS": row["total"]}
+                for row in metrics["by_confidence"]
+            ]), hide_index=True, use_container_width=True)
+    else:
+        st.info("Importe o catálogo de anomalias e o ROF080 em Importações "
+                "para medir automaticamente o histórico de revisões.")
 
     st.markdown("### Programa de fidelidade por revisões")
     loyalty_query = {"status": "ativa"}
