@@ -140,7 +140,7 @@ if can(user, "journey.view"):
 if can(user, "import.execute"):
     nav.append(
         {
-            "label": "Importar REL_VEICULOS",
+            "label": "Importações",
             "key": "import",
             "group": "Administração",
         }
