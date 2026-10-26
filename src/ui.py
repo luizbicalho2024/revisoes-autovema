@@ -23,6 +23,7 @@ NAV_ICONS = {
     "appearance": ":material/palette:",
     "account": ":material/account_circle:",
     "debug": ":material/bug_report:",
+    "workshop_history": ":material/history:",
 }
 
 # Vetores locais: dispensam fontes ou bibliotecas externas para o item ativo.
@@ -40,6 +41,7 @@ NAV_SVG_PATHS = {
     "appearance": '<path d="M12 3a9 9 0 1 0 9 9c0-2-2-3-4-3h-2a2 2 0 0 1-2-2V5a2 2 0 0 0-1-2z"/><circle cx="7" cy="12" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="17" cy="13" r="1"/>',
     "account": '<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>',
     "debug": '<circle cx="12" cy="12" r="7"/><path d="M9 8h6M9 12h6M9 16h6"/>',
+    "workshop_history": '<path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 6v6l4 2"/>',
 }
 
 
@@ -120,7 +122,7 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
         }}
 
         .block-container {{
-            padding-top: 3.9rem !important;
+            padding-top: 1.8rem !important;
             padding-bottom: 3rem;
             max-width: 1540px;
         }}
@@ -938,7 +940,7 @@ def inject_css(appearance: dict[str, Any] | None = None) -> None:
             }}
 
             .block-container {{
-                padding-top: 4.15rem !important;
+                padding-top: 2.9rem !important;
             }}
 
             [data-testid="stSidebarCollapsedControl"],

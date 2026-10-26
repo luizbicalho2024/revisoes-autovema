@@ -18,6 +18,7 @@ def render(db: Database, user: dict) -> None:
         st.error("Diagnóstico restrito ao superadministrador autenticado.")
         st.stop()
     page_header("Diagnóstico de importações", "Inspecione o que foi efetivamente armazenado e encontre os vínculos ausentes.")
+    st.caption("Para analisar revisões por chassi e período, acesse **Histórico da Oficina** no menu lateral.")
     st.warning("O material para compartilhamento suprime nomes, documentos, placas, chassis, e-mails, "
                "observações e segredos. Não compartilhe capturas da área operacional com dados pessoais.")
     if "dh_debug_salt" not in st.session_state:

@@ -22,7 +22,6 @@ from src.ui import (
     sidebar_footer,
     sidebar_identity,
     sidebar_navigation,
-    render_main_navigation,
 )
 from src.pages import (
     account,
@@ -31,6 +30,7 @@ from src.pages import (
     customers,
     dashboard,
     debug,
+    workshop_history,
     import_page,
     loyalty,
     revisions,
@@ -185,6 +185,7 @@ if can(user, "settings.manage"):
     )
 
 if user.get("role") == "superadmin":
+    nav.append({"label": "Histórico da Oficina", "key": "workshop_history", "group": "Administração"})
     nav.append({"label": "Diagnóstico de Dados", "key": "debug", "group": "Administração"})
 
 nav.append(
@@ -208,10 +209,6 @@ if st.sidebar.button(
 
 sidebar_footer()
 
-# Menu independente da sidebar: permanece acessivel no celular e em caso
-# de estado antigo persistido pelo navegador. Respeita as permissoes de nav.
-render_main_navigation(nav, selected)
-
 if user.get("must_change_password") and selected != "account":
     st.warning(
         "Você está usando a senha inicial. "
@@ -221,6 +218,7 @@ if user.get("must_change_password") and selected != "account":
 PAGES = {
     "dashboard": dashboard.render,
     "debug": debug.render,
+    "workshop_history": workshop_history.render,
     "customers": customers.render,
     "vehicles": vehicles.render,
     "revisions": revisions.render,

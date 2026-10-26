@@ -194,6 +194,10 @@ def render(db: Database, user: dict[str, Any]) -> None:
         "Painel das 5 revisões",
         "Quem realizou cada revisão, quem completou o ciclo e onde existem lacunas a investigar.",
     )
+    if user.get("role") == "superadmin":
+        st.info("A matriz abaixo mede a jornada **dos compradores da base atual**, não todo o histórico de oficina. "
+                "Para cruzar as OS de 2021 em diante, inclusive veículos fora das 980 vendas, "
+                "abra **Histórico da Oficina** no menu lateral.")
     st.caption("Revisões comprovadas pela jornada ou por serviço identificado em OS ROF080 "
                "encerrada, vinculada ao veículo e posterior à venda. "
                "Lacunas e observações sem confirmação aparecem separadamente.")

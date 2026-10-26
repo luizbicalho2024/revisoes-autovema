@@ -25,7 +25,7 @@ SAFE_TEXT = {
     "source", "import_type", "status", "classification", "confidence",
     "evidence_source", "link_status", "maintenance_status", "journey_status",
     "review_override", "source_type", "source_revision", "origin", "type",
-    "brand", "model", "fuel", "fuel_type", "company_code", "company_dealer",
+    "brand", "model", "fuel", "fuel_type", "company_code",
     "revision_number", "revision_stage", "manual_revision_number", "os_km",
     "eligible_reconciliation", "owner_match", "post_sale", "is_cancelled",
     "loyalty_cancelled", "current_revision", "loyalty_bonus_pct",
@@ -34,6 +34,7 @@ SAFE_TEXT = {
 DROP_KEYS = {
     "password_hash", "password", "mongo_uri", "uri", "secret", "token", "access_token",
     "refresh_token", "api_key", "authorization", "credential", "logo_b64", "logo_mime",
+    "source_raw",
 }
 
 
