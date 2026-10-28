@@ -188,6 +188,16 @@ def ensure_indexes(db: Database) -> None:
         [("service_order_id", ASCENDING)], name="ix_revision_event_os"
     )
 
+    db.sigmec_orders.create_index(
+        [("os_normalized", ASCENDING)], name="ix_sigmec_os_number"
+    )
+    db.sigmec_orders.create_index(
+        [("link_status", ASCENDING)], name="ix_sigmec_link_status"
+    )
+    db.revision_events.create_index(
+        [("sigmec_code", ASCENDING)], name="ix_event_sigmec_code"
+    )
+
     db.import_jobs.create_index(
         [("started_at", DESCENDING)],
         name="ix_import_started",

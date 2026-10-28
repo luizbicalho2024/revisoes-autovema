@@ -17,7 +17,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 
 COLLECTIONS = (
     "import_jobs", "customers", "vehicles", "sales", "journeys",
-    "revisions", "revision_events", "service_orders", "revision_catalog",
+    "revisions", "revision_events", "service_orders", "sigmec_orders", "revision_catalog",
 )
 
 # Campos de contexto não identificadores; demais strings são pseudonimizadas.
@@ -88,6 +88,19 @@ def safe_document(collection: str, doc: dict[str, Any], salt: bytes) -> dict[str
             result["codigo_revisao"] = code
         if re.search(r"REV(?:IS[AÃ]O|ISAO|\.)", description.upper()) and "@" not in description:
             result["descricao_catalogo"] = description[:160]
+    elif collection == "sigmec_orders":
+        # Códigos técnicos de 7 caracteres são seguros; nunca exportar
+        # texto livre de atendimento ou identificadores sem pseudonimizar.
+        items = doc.get("interventions") or []
+        result["codigos_sigmec"] = sorted({
+            str(item.get("code") or "") for item in items
+            if re.fullmatch(r"[0-9]{4}[A-Z][0-9]{2}", str(item.get("code") or ""))
+        })[:100]
+        result["resultado_cruzamento"] = [
+            {"code": str(item.get("code") or "") if re.fullmatch(r"[0-9]{4}[A-Z][0-9]{2}",str(item.get("code") or "")) else "—",
+             "status": str(item.get("status") or "")[:50]}
+            for item in (doc.get("revision_results") or [])[:25]
+        ]
     elif collection == "service_orders":
         matches: set[str] = set()
         for label in (doc.get("services") or [])[:100]:

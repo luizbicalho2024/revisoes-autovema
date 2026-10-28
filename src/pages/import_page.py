@@ -15,6 +15,8 @@ from ..service_importer import (
 from ..ui import page_header
 from ..revision_taxonomy import read_catalog
 from ..rof080_importer import import_rof080, preview_rof080
+from ..sigmec_importer import import_sigmec, preview_sigmec
+from ..revision_taxonomy import catalog_from_database
 from ..repositories import audit
 from datetime import datetime, timezone
 
@@ -288,6 +290,92 @@ def _render_rof080_tab(db: Database, user: dict) -> None:
         st.json(summary, expanded=False)
 
 
+def _render_sigmec_tab(db: Database, user: dict) -> None:
+    st.markdown("### SIGMEC (.001) – Códigos de intervenções das revisões")
+    st.caption(
+        "Importe arquivos SIGMEC de 2024, 2025 e 2026. O sistema lê os registros #C/#E, "
+        "reconhece a OS e o código local, e cruza com o histórico ROF080. "
+        "Não usa placa ou modelo isoladamente para confirmar revisões. "
+        "Revisão de entrega não conta como revisão periódica."
+    )
+    uploaded = st.file_uploader(
+        "Arquivos SIGMEC (.001) – selecione um ou vários",
+        type=["001"], accept_multiple_files=True, key="sigmec001_upload",
+    )
+    if not uploaded:
+        st.info("Importe o ROF080 e o catálogo de códigos antes dos arquivos SIGMEC para aumentar o aproveitamento.")
+        return
+    catalog = catalog_from_database(db)
+    content_by_hash = {}
+    preview_rows = []
+    for file in uploaded:
+        content = file.getvalue()
+        digest = hashlib.sha256(content).hexdigest()
+        if digest in content_by_hash:
+            preview_rows.append({
+                "Arquivo": file.name, "OS": "—", "Códigos de revisão": "—", "Outras revisões para análise": "—",
+                "Situação": "Duplicado de " + content_by_hash[digest][0],
+            })
+            continue
+        try:
+            report = preview_sigmec(content, file.name, catalog)
+        except Exception as exc:
+            st.error(f"Não foi possível validar {file.name}: {exc}")
+            return
+        existing = _already_imported(db, content, "sigmec001")
+        content_by_hash[digest] = (file.name, content)
+        preview_rows.append({
+            "Arquivo": file.name,
+            "OS": report["orders"],
+            "Códigos de revisão": report["revision_codes"],
+            "Outras revisões para análise": report["unmapped_revision_items"],
+            "Situação": "Já importado" if existing else "Pronto para processar",
+        })
+    st.dataframe(pd.DataFrame(preview_rows), hide_index=True, use_container_width=True)
+    st.info(
+        "O código confirma qual intervenção foi registrada. Para atualizar uma revisão como "
+        "comprovada, exigimos OS correspondente no ROF080, etapa inequívoca, "
+        "encerramento, vínculo do veículo e elegibilidade após a venda. "
+        "As demais ficam disponíveis para conferência."
+    )
+    confirmation = st.checkbox(
+        "Confirmo a importação dos arquivos SIGMEC e a conciliação pelos códigos de OS.",
+        key="sigmec001_confirm",
+    )
+    if st.button("Importar SIGMEC e cruzar revisões", type="primary",
+                 disabled=not confirmation, use_container_width=True,
+                 key="sigmec001_process"):
+        result_rows = []
+        progress_status = st.empty()
+        for digest, (filename, content) in content_by_hash.items():
+            try:
+                with st.spinner(f"Analisando {filename} ..."):
+                    def progress(done: int, total: int) -> None:
+                        progress_status.caption(f"{filename}: {done:,}/{total:,} OS analisadas".replace(",", "."))
+                    result = import_sigmec(db, content, filename, user, progress=progress)
+            except Exception as exc:
+                st.error(f"Importação de {filename} interrompida: {type(exc).__name__}: {exc}")
+                break
+            result_rows.append({
+                "Arquivo": filename,
+                "OS lidas": result.get("orders", 0),
+                "OS no ROF080": result.get("os_localizada", 0),
+                "Códigos de revisão": result.get("catalog_revision_items", 0),
+                "Outras revisões para análise": result.get("unmapped_revision_items", 0),
+                "Evidências qualificadas": result.get("events_qualified", 0),
+                "Elegíveis para comprovação": result.get("events_eligible_for_confirming", 0),
+                "Situação": "Já importado" if result.get("already_imported") else "Concluído",
+            })
+        progress_status.empty()
+        if result_rows:
+            st.success("Processamento SIGMEC finalizado para os arquivos indicados.")
+            st.dataframe(pd.DataFrame(result_rows), hide_index=True, use_container_width=True)
+        st.caption(
+            "Uma evidência qualificada não equivale necessariamente a uma revisão confirmada "
+            "para o comprador atual. Consulte Histórico da Oficina e Diagnóstico de Dados."
+        )
+
+
 def render(db: Database, user: dict) -> None:
     require_permission(user, "import.execute")
     page_header(
@@ -295,8 +383,8 @@ def render(db: Database, user: dict) -> None:
         "Atualize a base comercial e o histórico de pós-venda sem duplicidade.",
     )
 
-    rel_tab, service_tab, catalog_tab, rof080_tab = st.tabs(
-        ["REL_VEICULOS", "ROF001 / OS", "Códigos de revisão", "ROF080 / Histórico"]
+    rel_tab, service_tab, catalog_tab, rof080_tab, sigmec_tab = st.tabs(
+        ["REL_VEICULOS", "ROF001 / OS", "Códigos de revisão", "ROF080 / Histórico", "SIGMEC / Códigos"]
     )
 
     with rel_tab:
@@ -310,3 +398,6 @@ def render(db: Database, user: dict) -> None:
 
     with rof080_tab:
         _render_rof080_tab(db, user)
+
+    with sigmec_tab:
+        _render_sigmec_tab(db, user)

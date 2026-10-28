@@ -57,6 +57,16 @@ def render(db: Database, user: dict) -> None:
         st.caption(f"Falha na leitura: {type(exc).__name__}")
         return
 
+    sigmec_total = db.sigmec_orders.count_documents({})
+    if sigmec_total:
+        sigmec_linked = db.sigmec_orders.count_documents({"link_status": "os_localizada"})
+        st.caption(
+            f"SIGMEC importado: {_fmt(sigmec_total)} OS com intervenções codificadas; "
+            f"{_fmt(sigmec_linked)} conciliadas com OS do ROF080. "
+            "A classificação por código das revisões aparece nas evidências do histórico "
+            "quando a correspondência é inequívoca."
+        )
+
     k = st.columns(5)
     for col, label, value, help_text in zip(k, [
         "Veículos vendidos na base", "Chassis nas OS", "Chassis nas duas bases",
