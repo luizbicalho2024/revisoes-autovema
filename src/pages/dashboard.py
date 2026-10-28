@@ -81,7 +81,7 @@ def _table_record(row: dict[str, Any]) -> dict[str, Any]:
 
 
 def render(db: Database, user: dict[str, Any]) -> None:
-    page_header("Revisões SIGMEC", "Sequência da 1ª à 5ª revisão por cliente e veículo.")
+    page_header("Revisões", "Sequência da 1ª à 5ª revisão por cliente e veículo.")
     try:
         data = _load(db, user)
     except Exception as exc:
