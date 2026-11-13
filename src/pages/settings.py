@@ -16,6 +16,7 @@ from ..maintenance import (
     reconcile_all_service_history,
 )
 from ..repositories import audit
+from ..catalog_admin_ui import render_catalog_settings
 from ..security import require_permission
 from ..ui import page_header
 
@@ -112,6 +113,9 @@ def render(db: Database, user: dict) -> None:
                 {"rules": new_rules},
             )
             st.success("Regras de revisão salvas.")
+
+    st.divider()
+    render_catalog_settings(db, user)
 
     st.divider()
     st.markdown("### Conciliação automática das ordens de serviço")

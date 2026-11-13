@@ -22,6 +22,7 @@ from src.ui import (
     sidebar_footer,
     sidebar_identity,
     sidebar_navigation,
+    render_main_navigation,
 )
 from src.pages import (
     account,
@@ -197,6 +198,7 @@ nav.append(
 )
 
 selected = sidebar_navigation(nav)
+render_main_navigation(nav, selected)
 
 st.sidebar.divider()
 if st.sidebar.button(
