@@ -35,6 +35,9 @@ class FakeStreamlit:
     def caption(self, *_args, **_kwargs):
         pass
 
+    def empty(self):
+        return self
+
     def markdown(self, *_args, **_kwargs):
         pass
 

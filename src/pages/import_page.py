@@ -241,7 +241,7 @@ def _render_catalog_tab(db: Database, user: dict) -> None:
         now = datetime.now(timezone.utc)
         for row in rows:
             db.revision_catalog.update_one({"_id": row["code"]},
-                {"$set": {"description": row["description"], "updated_at": now,
+                {"$set": {"description": row["description"], "disabled": False, "updated_at": now,
                           "updated_by": user.get("email")}}, upsert=True)
         audit(db, user, "revision_catalog_imported", "revision_catalog", "catalog",
               {"codes": len(rows)})

@@ -14,9 +14,8 @@ from .security import can
 def load_five(db: Any, user: dict[str, Any], active_only: bool = True) -> dict[str, Any]:
     # A mesma consulta consolidada empregada pelo BI, evitando indicadores
     # contraditórios entre Clientes, Veículos, Jornada, Fidelidade e Serviços.
-    from .pages.dashboard import _load_audit
-    data, _ = _load_audit(db, user, active_only)
-    return data
+    from .revision_loader import load_five as load_compatible
+    return load_compatible(db, user, active_only)
 
 
 def summary_cards(rows: list[dict[str, Any]]) -> None:

@@ -111,8 +111,12 @@ def read_catalog(file_bytes: bytes) -> list[dict[str, str]]:
 
 def catalog_from_database(db: Any) -> dict[str, str]:
     data = {code: desc for code, desc in DEFAULT_CATALOG}
-    for row in db.revision_catalog.find({}, {"_id": 1, "description": 1}):
-        data[str(row["_id"]).upper()] = str(row.get("description") or "")
+    for row in db.revision_catalog.find({}, {"_id": 1, "description": 1, "disabled": 1}):
+        code = str(row["_id"]).upper()
+        if row.get("disabled"):
+            data.pop(code, None)
+        else:
+            data[code] = str(row.get("description") or "")
     return data
 
 
